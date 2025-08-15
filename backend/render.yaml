@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: bulkload-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: GUMROAD_PRODUCT_ID
+        sync: false
+      - key: GUMROAD_SELLER_ID
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+    healthCheckPath: /api/health
+    autoDeploy: true
