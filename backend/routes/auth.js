@@ -148,7 +148,10 @@ router.post('/register', validateRegistration, async (req, res) => {
 
     res.status(201).json({ 
       message: 'Registration successful! Please check your email for verification code.',
-      email: email
+      requiresVerification: true,
+      pendingUserId: pendingUser._id,
+      email: email,
+      username: username
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -159,22 +162,26 @@ router.post('/register', validateRegistration, async (req, res) => {
 // Verify email
 router.post('/verify', async (req, res) => {
   try {
-    const { email, verificationCode } = req.body;
+    const { pendingUserId, code } = req.body;
 
-    const pendingUser = await PendingUser.findOne({ 
-      email, 
-      verificationCode,
-      verified: false 
-    });
+    const pendingUser = await PendingUser.findById(pendingUserId);
 
     if (!pendingUser) {
-      return res.status(400).json({ error: 'Invalid verification code or email' });
+      return res.status(400).json({ error: 'Invalid verification request' });
+    }
+
+    if (pendingUser.verified) {
+      return res.status(400).json({ error: 'Email already verified' });
+    }
+
+    // Check if code matches
+    if (pendingUser.verificationCode !== code) {
+      return res.status(400).json({ error: 'Invalid verification code' });
     }
 
     // Check if code is expired (15 minutes)
     const now = new Date();
-    const codeAge = now - pendingUser.createdAt;
-    if (codeAge > 15 * 60 * 1000) { // 15 minutes
+    if (pendingUser.verificationCodeExpiresAt < now) {
       await PendingUser.findByIdAndDelete(pendingUser._id);
       return res.status(400).json({ error: 'Verification code has expired' });
     }
