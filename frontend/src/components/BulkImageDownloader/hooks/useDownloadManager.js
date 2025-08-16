@@ -65,8 +65,9 @@ export const useDownloadManager = () => {
           const result = await processImageDownloads(downloads, summary);
 
           if (result.success) {
-            showSuccess(result.message);
-            onSuccess?.(result);
+            // Don't show success toast here - let the component handle it
+            // showSuccess(result.message);
+            onSuccess?.({ results, summary, downloads, processResult: result });
           } else {
             throw new Error(result.message || "Failed to process downloads");
           }

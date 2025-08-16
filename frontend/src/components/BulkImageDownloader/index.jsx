@@ -161,20 +161,21 @@ const BulkImageDownloader = () => {
           // Add to download history
           downloadHistory.addDownloadEntry({
             totalCount: urlList.length,
-            successCount: downloadResult.successful || 0,
-            failedCount: downloadResult.failed || 0,
+            successCount: downloadResult.summary?.successful || 0,
+            failedCount: downloadResult.summary?.failed || 0,
             results: downloadResult.results || [],
           });
 
           // Refresh user data
           userData.refreshUserData();
 
-          // Show success message
-          showSuccess(
-            `Download completed! ${
-              downloadResult.successful || 0
-            } images downloaded.`
-          );
+          // Show success message - only if we actually have successful downloads
+          const successfulCount = downloadResult.summary?.successful || 0;
+          if (successfulCount > 0) {
+            showSuccess(
+              `Download completed! ${successfulCount} images downloaded.`
+            );
+          }
         },
         // Error callback
         (errorInfo) => {
