@@ -154,37 +154,37 @@ const BulkImageDownloader = () => {
     }
 
     try {
-             const result = await downloadManager.downloadViaBackend(
-         urlList,
-         // Success callback
-         (downloadResult) => {
-           // Add to download history
-           downloadHistory.addDownloadEntry({
-             totalCount: urlList.length,
-             successCount: downloadResult.summary?.successful || 0,
-             failedCount: downloadResult.summary?.failed || 0,
-             results: downloadResult.results || [],
-             urls: urlList, // Add the URLs to the history
-           });
+      const result = await downloadManager.downloadViaBackend(
+        urlList,
+        // Success callback
+        (downloadResult) => {
+          // Add to download history
+          downloadHistory.addDownloadEntry({
+            totalCount: urlList.length,
+            successCount: downloadResult.summary?.successful || 0,
+            failedCount: downloadResult.summary?.failed || 0,
+            results: downloadResult.results || [],
+            urls: urlList, // Add the URLs to the history
+          });
 
-           // Refresh user data (for both authenticated and anonymous users)
-           userData.refreshUserData();
+          // Refresh user data (for both authenticated and anonymous users)
+          userData.refreshUserData();
 
-           // Show success message - only if we actually have successful downloads
-           const successfulCount = downloadResult.summary?.successful || 0;
-           if (successfulCount > 0) {
-             showSuccess(
-               `Download completed! ${successfulCount} images downloaded.`
-             );
-           }
-         },
-         // Error callback
-         (errorInfo) => {
-           console.error("Download failed:", errorInfo);
-         },
-         // Pass anonymous session ID for anonymous users
-         userData.anonymousSessionId
-       );
+          // Show success message - only if we actually have successful downloads
+          const successfulCount = downloadResult.summary?.successful || 0;
+          if (successfulCount > 0) {
+            showSuccess(
+              `Download completed! ${successfulCount} images downloaded.`
+            );
+          }
+        },
+        // Error callback
+        (errorInfo) => {
+          console.error("Download failed:", errorInfo);
+        },
+        // Pass anonymous session ID for anonymous users
+        userData.anonymousSessionId
+      );
 
       return result;
     } catch (error) {

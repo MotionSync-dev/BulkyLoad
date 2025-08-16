@@ -99,6 +99,8 @@ router.post('/images', optionalAuth, async (req, res) => {
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
       try {
+        console.log(`Processing URL ${i + 1}/${urls.length}: ${url}`);
+        
         // Check if it's an SVG file
         const isSvg = url.toLowerCase().endsWith('.svg');
         let response;
@@ -175,32 +177,77 @@ router.post('/images', optionalAuth, async (req, res) => {
             continue;
           }
 
-          // Handle regular images - be more flexible with content types
-          if (!contentType.startsWith('image/') && !contentType.includes('octet-stream')) {
+          // Enhanced content type detection for all image formats
+          let isImage = false;
+          let detectedType = '';
+          
+          // Check content type header first
+          if (contentType.startsWith('image/')) {
+            isImage = true;
+            detectedType = contentType;
+          } else if (contentType.includes('octet-stream')) {
+            // Generic binary content - need to detect image type
+            isImage = false;
+            detectedType = 'application/octet-stream';
+          } else {
             // Try to detect if it's actually an image by checking the first few bytes
-            const firstBytes = response.data.slice(0, 4);
-            const isJPEG = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8;
-            const isPNG = firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && firstBytes[2] === 0x4E && firstBytes[3] === 0x47;
-            const isGIF = firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46;
-            const isWebP = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46 && firstBytes[3] === 0x57;
+            const firstBytes = response.data.slice(0, 8);
             
-            if (!isJPEG && !isPNG && !isGIF && !isWebP) {
-              results.push({
-                url,
-                success: false,
-                error: 'Not an image file'
-              });
-              continue;
+            // BMP signature: BM (42 4D)
+            const isBMP = firstBytes[0] === 0x42 && firstBytes[1] === 0x4D;
+            
+            // JPEG signature: FF D8 FF
+            const isJPEG = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8 && firstBytes[2] === 0xFF;
+            
+            // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+            const isPNG = firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && 
+                         firstBytes[2] === 0x4E && firstBytes[3] === 0x47 &&
+                         firstBytes[4] === 0x0D && firstBytes[5] === 0x0A &&
+                         firstBytes[6] === 0x1A && firstBytes[7] === 0x0A;
+            
+            // GIF signature: GIF87a or GIF89a
+            const isGIF = (firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && 
+                          firstBytes[2] === 0x46 && firstBytes[3] === 0x38 &&
+                          (firstBytes[4] === 0x37 || firstBytes[4] === 0x39) && 
+                          firstBytes[5] === 0x61);
+            
+            // WebP signature: RIFF....WEBP
+            const isWebP = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 && 
+                          firstBytes[2] === 0x46 && firstBytes[3] === 0x57 &&
+                          firstBytes[4] === 0x45 && firstBytes[5] === 0x42 && 
+                          firstBytes[6] === 0x50;
+            
+            // TIFF signature: II (Intel) or MM (Motorola)
+            const isTIFF = (firstBytes[0] === 0x49 && firstBytes[1] === 0x49) || 
+                          (firstBytes[0] === 0x4D && firstBytes[1] === 0x4D);
+            
+            if (isBMP || isJPEG || isPNG || isGIF || isWebP || isTIFF) {
+              isImage = true;
+              
+              // Set the correct content type based on detection
+              if (isBMP) detectedType = 'image/bmp';
+              else if (isJPEG) detectedType = 'image/jpeg';
+              else if (isPNG) detectedType = 'image/png';
+              else if (isGIF) detectedType = 'image/gif';
+              else if (isWebP) detectedType = 'image/webp';
+              else if (isTIFF) detectedType = 'image/tiff';
+              
+              console.log(`Detected image type: ${detectedType} for ${url}`);
+            } else {
+              console.log(`Not an image file: ${url}, first bytes:`, firstBytes.slice(0, 4).map(b => b.toString(16).padStart(2, '0')).join(' '));
             }
-            
-            // If we detect it's an image but content-type is wrong, fix it
-            if (isJPEG) contentType = 'image/jpeg';
-            else if (isPNG) contentType = 'image/png';
-            else if (isGIF) contentType = 'image/gif';
-            else if (isWebP) contentType = 'image/webp';
           }
 
-          // Generate filename - handle Unsplash and other complex URLs better
+          if (!isImage) {
+            results.push({
+              url,
+              success: false,
+              error: 'Not an image file'
+            });
+            continue;
+          }
+
+          // Generate filename - handle complex URLs better
           let filename = '';
           const urlPath = url.split('?')[0]; // Remove query parameters
           const pathParts = urlPath.split('/');
@@ -209,16 +256,16 @@ router.post('/images', optionalAuth, async (req, res) => {
           if (lastPart && lastPart.includes('.')) {
             filename = lastPart;
           } else if (lastPart && lastPart.length > 0) {
-            const extension = contentType.split('/')[1] || 'jpg';
+            const extension = detectedType.split('/')[1] || 'jpg';
             filename = `${lastPart}.${extension}`;
           } else {
-            const extension = contentType.split('/')[1] || 'jpg';
+            const extension = detectedType.split('/')[1] || 'jpg';
             filename = `image-${i + 1}.${extension}`;
           }
 
           // Create data URL for the image
           const base64 = Buffer.from(response.data).toString('base64');
-          const dataUrl = `data:${contentType};base64,${base64}`;
+          const dataUrl = `data:${detectedType};base64,${base64}`;
 
           successfulDownloads.push({
             filename,
@@ -232,7 +279,7 @@ router.post('/images', optionalAuth, async (req, res) => {
             success: true,
             filename,
             size: response.data.byteLength || response.data.length,
-            contentType
+            contentType: detectedType
           });
 
         } else {
