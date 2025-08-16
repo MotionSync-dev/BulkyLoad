@@ -128,16 +128,6 @@ const SubscriptionPage = () => {
             </div>
           </div>
 
-          {/* Debug Info - Remove in production */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">
-              Debug Info (Remove in production):
-            </h4>
-            <pre className="text-xs text-gray-600 overflow-auto">
-              {JSON.stringify(subscription, null, 2)}
-            </pre>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="flex items-center space-x-3">

@@ -32,26 +32,6 @@ const corsOrigins =
       ].filter(Boolean)
     : ["http://localhost:5173", "http://localhost:3000"];
 
-console.log("CORS Origins:", corsOrigins);
-console.log("NODE_ENV:", process.env.NODE_ENV);
-console.log("CORS_ORIGIN env var:", process.env.CORS_ORIGIN);
-
-// CORS debugging middleware
-app.use((req, res, next) => {
-  console.log(`🌐 CORS Debug: ${req.method} ${req.path}`);
-  console.log(`   Origin: ${req.headers.origin}`);
-  console.log(`   User-Agent: ${req.headers['user-agent']}`);
-  
-  // Log CORS-related headers
-  if (req.method === 'OPTIONS') {
-    console.log(`   CORS Preflight Request for: ${req.path}`);
-    console.log(`   Access-Control-Request-Method: ${req.headers['access-control-request-method']}`);
-    console.log(`   Access-Control-Request-Headers: ${req.headers['access-control-request-headers']}`);
-  }
-  
-  next();
-});
-
 // Enhanced CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
@@ -61,7 +41,6 @@ const corsOptions = {
     if (corsOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      console.log(`🚫 CORS blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -150,10 +129,5 @@ app.use("*", (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(
-    `🔑 GUMROAD_PRODUCT_ID: ${process.env.GUMROAD_PRODUCT_ID || "NOT SET"}`
-  );
-  console.log(
-    `🔑 GUMROAD_SELLER_ID: ${process.env.GUMROAD_SELLER_ID || "NOT SET"}`
-  );
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
