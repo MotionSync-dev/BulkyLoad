@@ -158,13 +158,14 @@ const BulkImageDownloader = () => {
         urlList,
         // Success callback
         (downloadResult) => {
-          // Add to download history
-          downloadHistory.addDownloadEntry({
-            totalCount: urlList.length,
-            successCount: downloadResult.summary?.successful || 0,
-            failedCount: downloadResult.summary?.failed || 0,
-            results: downloadResult.results || [],
-          });
+                   // Add to download history
+         downloadHistory.addDownloadEntry({
+           totalCount: urlList.length,
+           successCount: downloadResult.summary?.successful || 0,
+           failedCount: downloadResult.summary?.failed || 0,
+           results: downloadResult.results || [],
+           urls: urlList, // Add the URLs to the history
+         });
 
           // Refresh user data
           userData.refreshUserData();
@@ -381,42 +382,8 @@ const BulkImageDownloader = () => {
           )}
         </div>
 
-        {/* Right Column - Stats & History */}
-        <div className="space-y-6">
-          {/* User Stats */}
-          {isAuthenticated && (
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Your Stats
-              </h3>
-              {userData.stats ? (
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total Downloads:</span>
-                    <span className="font-medium">
-                      {userData.stats.totalDownloads}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Success Rate:</span>
-                    <span className="font-medium">
-                      {userData.stats.successRate}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total Images:</span>
-                    <span className="font-medium">
-                      {userData.stats.totalAttempted}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500">
-                  No download history yet
-                </div>
-              )}
-            </div>
-          )}
+                 {/* Right Column - Stats & History */}
+         <div className="space-y-6">
 
           {/* Subscription Status */}
           {isAuthenticated && (
@@ -518,15 +485,7 @@ const BulkImageDownloader = () => {
                 <Trash2 className="w-4 h-4" />
                 <span>Clear History</span>
               </button>
-              {isAuthenticated && (
-                <button
-                  onClick={userData.fetchUserStats}
-                  className="w-full btn-secondary text-sm px-3 py-2 flex items-center justify-center space-x-2"
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  <span>Test Stats Fetch</span>
-                </button>
-              )}
+              
             </div>
           </div>
         </div>
@@ -548,40 +507,60 @@ const BulkImageDownloader = () => {
               </button>
             </div>
 
-            <div className="overflow-x-auto">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {downloadHistory.getRecentDownloads(10).map((item, index) => (
-                  <div key={item.id} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-900">
-                        Download #{item.id}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(item.timestamp).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Total:</span>
-                        <span className="font-medium">{item.totalCount}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Success:</span>
-                        <span className="font-medium text-green-600">
-                          {item.successCount}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Failed:</span>
-                        <span className="font-medium text-red-600">
-                          {item.failedCount}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                         <div className="overflow-x-auto">
+               <div className="space-y-4">
+                 {downloadHistory.getRecentDownloads(10).map((item, index) => (
+                   <div key={item.id} className="bg-gray-50 rounded-lg p-4">
+                     <div className="flex items-center justify-between mb-3">
+                       <span className="text-sm font-medium text-gray-900">
+                         Download #{item.id}
+                       </span>
+                       <span className="text-xs text-gray-500">
+                         {new Date(item.timestamp).toLocaleDateString()}
+                       </span>
+                     </div>
+                     
+                     {/* Download Summary */}
+                     <div className="grid grid-cols-3 gap-4 mb-3 text-sm">
+                       <div className="text-center">
+                         <div className="text-gray-600">Total</div>
+                         <div className="font-medium">{item.totalCount}</div>
+                       </div>
+                       <div className="text-center">
+                         <div className="text-gray-600">Success</div>
+                         <div className="font-medium text-green-600">{item.successCount}</div>
+                       </div>
+                       <div className="text-center">
+                         <div className="text-gray-600">Failed</div>
+                         <div className="font-medium text-red-600">{item.failedCount}</div>
+                       </div>
+                     </div>
+                     
+                     {/* Image URLs */}
+                     {item.urls && item.urls.length > 0 && (
+                       <div className="space-y-2">
+                         <div className="text-sm font-medium text-gray-700">Downloaded Images:</div>
+                         <div className="max-h-32 overflow-y-auto space-y-1">
+                           {item.urls.map((url, urlIndex) => (
+                             <div key={urlIndex} className="text-xs text-gray-600 bg-white p-2 rounded border truncate">
+                               <a 
+                                 href={url} 
+                                 target="_blank" 
+                                 rel="noopener noreferrer"
+                                 className="hover:text-primary-600 hover:underline break-all"
+                                 title={url}
+                               >
+                                 {url}
+                               </a>
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                     )}
+                   </div>
+                 ))}
+               </div>
+             </div>
           </div>
         </div>
       )}

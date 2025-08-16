@@ -153,18 +153,7 @@ export const useUserData = () => {
     }
   }, [isAuthenticated, fetchRemainingDownloads, fetchUserStats]);
 
-  // Periodic refresh for authenticated users
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const intervalId = setInterval(() => {
-      console.log("🔄 Periodic refresh of user data...");
-      fetchRemainingDownloads();
-      fetchUserStats();
-    }, 10000); // 10 seconds
-
-    return () => clearInterval(intervalId);
-  }, [isAuthenticated, fetchRemainingDownloads, fetchUserStats]);
+  // No automatic periodic refresh - only manual refresh via buttons
 
   return {
     // State
