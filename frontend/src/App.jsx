@@ -37,13 +37,21 @@ const MainLayout = ({ children }) => {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">
-                🖼️ BulkyLoad
-              </h1>
+              <a href="/" className="flex items-center hover:opacity-80 transition-opacity">
+                <h1 className="text-2xl font-bold text-gray-900">
+                  🖼️ BulkyLoad
+                </h1>
+              </a>
             </div>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-4">
+              <a
+                href="/"
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
+              >
+                <span className="text-sm">Home</span>
+              </a>
               {!isAuthenticated && (
                 <a
                   href="/pricing"
@@ -99,6 +107,12 @@ const MainLayout = ({ children }) => {
           {/* Mobile Navigation */}
           {mobileMenuOpen && (
             <div className="md:hidden py-4 border-t border-gray-200">
+              <a
+                href="/"
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors duration-200 mb-2"
+              >
+                <span className="text-sm">Home</span>
+              </a>
               {!isAuthenticated && (
                 <a
                   href="/pricing"

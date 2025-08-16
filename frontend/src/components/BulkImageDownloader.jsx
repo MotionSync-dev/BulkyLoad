@@ -644,6 +644,29 @@ const BulkImageDownloader = () => {
     fetchRemainingDownloads();
   }, [isAuthenticated]);
 
+  // Add webhook listener to refresh data when subscription changes
+  useEffect(() => {
+    const handleWebhookUpdate = () => {
+      console.log('🔄 Webhook update detected, refreshing data...');
+      fetchRemainingDownloads();
+    };
+
+    // Listen for custom event that can be triggered by webhook updates
+    window.addEventListener('subscription-updated', handleWebhookUpdate);
+    
+    // Also refresh data periodically for all users (every 10 seconds for faster response)
+    let intervalId;
+    intervalId = setInterval(() => {
+      console.log('🔄 Periodic refresh of download data...');
+      fetchRemainingDownloads();
+    }, 10000); // 10 seconds for faster updates
+
+    return () => {
+      window.removeEventListener('subscription-updated', handleWebhookUpdate);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isAuthenticated]);
+
   const downloadViaBackend = async () => {
     const urlList = urls
       .split('\n')
@@ -785,6 +808,15 @@ const BulkImageDownloader = () => {
         
         // Always refresh download count to show accurate remaining downloads
         await fetchRemainingDownloads();
+        
+        // Trigger webhook update event for other components
+        if (summary.successful > 0) {
+          console.log('🔄 Downloads completed, triggering data refresh...');
+          window.dispatchEvent(new CustomEvent('subscription-updated'));
+          
+          // Show updated download count immediately
+          toast.success(`Download completed! ${summary.successful} images downloaded. Check your remaining downloads below.`);
+        }
       }
 
       setDownloadHistory(prev => [
@@ -807,6 +839,10 @@ const BulkImageDownloader = () => {
           toast.error(`Download limit exceeded. ${errorData.limits.remaining} downloads remaining today.`)
         } else if (errorData.error.includes('Anonymous users can only download up to 5 images per day')) {
           toast.error(`Daily limit exceeded. You have ${errorData.remaining} downloads remaining. Please sign in for unlimited downloads.`)
+          // Refresh remaining downloads count
+          fetchRemainingDownloads();
+        } else if (errorData.error.includes('Registered users can download up to 10 images per day')) {
+          toast.error(`Daily limit exceeded. You have ${errorData.limits.remaining} downloads remaining. Subscribe for unlimited downloads.`)
           // Refresh remaining downloads count
           fetchRemainingDownloads();
         } else {
@@ -979,9 +1015,10 @@ const BulkImageDownloader = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Subscription Status</h3>
                 <button
                   onClick={forceRefresh}
-                  className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                  className="text-sm text-primary-600 hover:text-primary-700 font-medium hover:bg-primary-50 px-2 py-1 rounded transition-colors"
+                  title="Refresh subscription status"
                 >
-                  Refresh
+                  🔄 Refresh
                 </button>
               </div>
               <div className="space-y-3">
@@ -1009,7 +1046,16 @@ const BulkImageDownloader = () => {
 
           {/* Download Limits */}
           <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Download Limits</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Download Limits</h3>
+              <button
+                onClick={forceRefresh}
+                className="text-sm text-primary-600 hover:text-primary-700 font-medium hover:bg-primary-50 px-2 py-1 rounded transition-colors"
+                title="Refresh download counts"
+              >
+                🔄 Refresh
+              </button>
+            </div>
             {remainingDownloads ? (
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">

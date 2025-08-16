@@ -102,72 +102,58 @@ router.post("/", async (req, res) => {
     });
 
     if (isSubscriptionActivationComprehensive || hasSubscriptionIdFallback) {
-      console.log("Activating subscription for user:", buyerEmail);
-
-      // Set subscription to expire in 1 month
-      const expiresAt = new Date();
-      expiresAt.setMonth(expiresAt.getMonth() + 1);
-
-      const newSubscription = {
+      // Logic to activate subscription
+      user.subscription = {
         status: "pro",
-        gumroadId:
-          subscription_id || sale_id || user.subscription.gumroadId || null,
-        expiresAt,
+        gumroadId: subscription_id || sale_id || user.subscription.gumroadId || null,
+        expiresAt: new Date(new Date().setMonth(new Date().getMonth() + 1)),
         createdAt: user.subscription.createdAt || new Date(),
       };
-
-      console.log("Setting new subscription:", newSubscription);
-
-      user.subscription = newSubscription;
       await user.save();
-
-      console.log("Subscription activated successfully for:", buyerEmail);
-      console.log("Updated subscription:", user.subscription);
+      
+      console.log(`✅ Subscription ACTIVATED for user: ${user.email}`);
+      console.log(`   - Status: ${user.subscription.status}`);
+      console.log(`   - Expires: ${user.subscription.expiresAt}`);
+      console.log(`   - Gumroad ID: ${user.subscription.gumroadId}`);
+      
+      return res.status(200).json({ 
+        message: "Webhook processed successfully",
+        userEmail: user.email,
+        action: "activated",
+        subscription: {
+          status: user.subscription.status,
+          expiresAt: user.subscription.expiresAt,
+          gumroadId: user.subscription.gumroadId
+        }
+      });
     } else if (
-      status === "cancelled" ||
-      status === "subscription_cancelled" ||
-      status === "refunded" ||
-      status === "failed" ||
-      refunded === "true"
+      status === "cancelled" || status === "subscription_cancelled" ||
+      status === "refunded" || status === "failed" || refunded === "true"
     ) {
-      console.log("Cancelling subscription for user:", buyerEmail);
-
-      user.subscription = {
-        status: "free",
-        gumroadId: null,
-        expiresAt: null,
-        createdAt: null,
-      };
-
+      // Logic to cancel subscription
+      user.subscription = { status: "free", gumroadId: null, expiresAt: null, createdAt: null };
       await user.save();
-      console.log("Subscription cancelled successfully for:", buyerEmail);
-      console.log("Updated subscription:", user.subscription);
+      
+      console.log(`❌ Subscription CANCELLED for user: ${user.email}`);
+      console.log(`   - Status: ${user.subscription.status}`);
+      
+      return res.status(200).json({ 
+        message: "Webhook processed successfully",
+        userEmail: user.email,
+        action: "cancelled",
+        subscription: {
+          status: user.subscription.status
+        }
+      });
     } else {
-      console.log(
-        "Unhandled webhook status - resource_name:",
-        resource_name,
-        "status:",
-        status,
-        "subscription_id:",
-        subscription_id
-      );
+      console.log("Unhandled webhook status:", status);
+      return res.status(200).json({ 
+        message: "Webhook processed successfully",
+        userEmail: user.email,
+        action: "no_change",
+        status: status
+      });
     }
-
-    // Always return 200 to acknowledge receipt
-    return res.status(200).json({
-      message: "Webhook processed successfully",
-      userEmail: buyerEmail,
-      action:
-        isSubscriptionActivationComprehensive || hasSubscriptionIdFallback
-          ? "activated"
-          : status === "cancelled" ||
-            status === "subscription_cancelled" ||
-            status === "refunded" ||
-            status === "failed" ||
-            refunded === "true"
-          ? "cancelled"
-          : "processed",
-    });
   } catch (error) {
     console.error("Gumroad webhook processing error:", error);
     // Return 200 so Gumroad doesn't retry excessively
