@@ -40,6 +40,7 @@ const BulkImageDownloader = () => {
     if (isAuthenticated) {
       // Force fresh data fetch for authenticated users
       fetchRemainingDownloads();
+      fetchUserStats();
     } else {
       // For anonymous users, also fetch remaining downloads
       fetchRemainingDownloads();
@@ -61,6 +62,9 @@ const BulkImageDownloader = () => {
   const forceRefresh = () => {
     console.log('Force refreshing subscription data...');
     fetchRemainingDownloads();
+    if (isAuthenticated) {
+      fetchUserStats();
+    }
   };
 
   const handleUrlInput = (e) => {
@@ -572,6 +576,21 @@ const BulkImageDownloader = () => {
     })
   }
 
+  // Fetch user stats
+  const fetchUserStats = async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/user/stats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStats(response.data.stats);
+    } catch (error) {
+      console.error('Failed to fetch user stats:', error);
+    }
+  };
+
   // Fetch remaining downloads for all users (anonymous and authenticated)
   const fetchRemainingDownloads = async () => {
     try {
@@ -656,6 +675,9 @@ const BulkImageDownloader = () => {
     intervalId = setInterval(() => {
       console.log('🔄 Periodic refresh of download data...');
       fetchRemainingDownloads();
+      if (isAuthenticated) {
+        fetchUserStats();
+      }
     }, 10000); // 10 seconds for faster updates
 
     return () => {
@@ -806,6 +828,11 @@ const BulkImageDownloader = () => {
         // Always refresh download count to show accurate remaining downloads
         await fetchRemainingDownloads();
         
+        // Update user stats for authenticated users
+        if (isAuthenticated) {
+          await fetchUserStats();
+        }
+        
         // Trigger webhook update event for other components
         if (summary.successful > 0) {
           console.log('🔄 Downloads completed, triggering data refresh...');
@@ -818,10 +845,11 @@ const BulkImageDownloader = () => {
 
       setDownloadHistory(prev => [
         {
+          id: Date.now(),
           timestamp: new Date().toLocaleString(),
-          totalUrls: urlList.length,
-          successful: summary.successful,
-          failed: summary.failed,
+          totalCount: urlList.length,
+          successCount: summary.successful,
+          failedCount: summary.failed,
           results
         },
         ...prev.slice(0, 9)
