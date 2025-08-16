@@ -96,6 +96,68 @@ export const testZipCreation = async () => {
 };
 
 /**
+ * Sanitize filename to be Windows-compatible and reasonably short
+ * @param {string} originalFilename - Original filename
+ * @param {number} index - File index for fallback naming
+ * @param {string} extension - File extension
+ * @returns {string} Sanitized filename
+ */
+const sanitizeFilename = (originalFilename, index, extension = '') => {
+  try {
+    // Extract just the filename part (remove path and query params)
+    let filename = originalFilename;
+    
+    // Remove data URL prefix if present
+    if (filename.startsWith('data:')) {
+      filename = `image_${index + 1}`;
+    } else {
+      // Remove URL path and query parameters
+      filename = filename.split('/').pop() || filename;
+      filename = filename.split('?')[0] || filename;
+      filename = filename.split('&')[0] || filename;
+      
+      // Remove invalid characters and limit length
+      filename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+      
+      // If filename is still too long or empty, use index-based naming
+      if (filename.length > 50 || !filename || filename === '_') {
+        filename = `image_${index + 1}`;
+      }
+    }
+    
+    // Ensure we have a valid extension
+    if (!extension && filename.includes('.')) {
+      const parts = filename.split('.');
+      extension = parts.pop();
+      filename = parts.join('.');
+    }
+    
+    // Final sanitization and length check
+    filename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    
+    // Limit total filename length to 50 characters
+    if (filename.length > 50) {
+      filename = filename.substring(0, 50);
+    }
+    
+    // Add extension if we have one
+    if (extension && !filename.endsWith(`.${extension}`)) {
+      filename = `${filename}.${extension}`;
+    }
+    
+    // Final validation - if still invalid, use index-based naming
+    if (!filename || filename === '_' || filename.length === 0) {
+      filename = `image_${index + 1}${extension ? `.${extension}` : ''}`;
+    }
+    
+    return filename;
+  } catch (error) {
+    console.warn('Filename sanitization failed, using index-based naming:', error);
+    return `image_${index + 1}${extension ? `.${extension}` : ''}`;
+  }
+};
+
+/**
  * Create a blob from data URL with extensive validation
  * @param {string} dataUrl - Data URL string
  * @returns {Promise<Blob>} Valid blob
@@ -177,6 +239,48 @@ const createBlobFromDataUrl = async (dataUrl) => {
 };
 
 /**
+ * Validate ZIP creation by creating a test ZIP first
+ * @returns {Promise<boolean>} True if ZIP creation is working
+ */
+const validateZipCreation = async () => {
+  try {
+    console.log("🧪 Validating ZIP creation capability...");
+    
+    const testZip = new JSZip();
+    
+    // Add a simple test file
+    testZip.file("test.txt", "ZIP validation test file");
+    
+    // Generate test ZIP with same settings as main ZIP
+    const testZipBlob = await testZip.generateAsync({ 
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: { level: 1 },
+      mimeType: "application/zip"
+    });
+    
+    // Validate test ZIP
+    if (testZipBlob.size === 0) {
+      throw new Error("Test ZIP is empty");
+    }
+    
+    if (testZipBlob.size < 100) {
+      throw new Error("Test ZIP is too small");
+    }
+    
+    // Test integrity
+    const verifyZip = new JSZip();
+    await verifyZip.loadAsync(testZipBlob);
+    
+    console.log("✅ ZIP validation passed:", { size: testZipBlob.size, type: testZipBlob.type });
+    return true;
+  } catch (error) {
+    console.error("❌ ZIP validation failed:", error);
+    return false;
+  }
+};
+
+/**
  * Process image download data and create ZIP file with enhanced reliability
  * @param {Array} downloads - Array of download objects from backend
  * @param {Object} summary - Download summary
@@ -186,6 +290,12 @@ export const processImageDownloads = async (downloads, summary) => {
   try {
     if (!downloads || downloads.length === 0) {
       throw new Error("No downloads to process");
+    }
+
+    // Validate ZIP creation capability first
+    const zipValidation = await validateZipCreation();
+    if (!zipValidation) {
+      throw new Error("ZIP creation validation failed - cannot proceed with download");
     }
 
     console.log("🚀 Starting ZIP creation with", downloads.length, "downloads");
@@ -242,22 +352,41 @@ export const processImageDownloads = async (downloads, summary) => {
               filename = `image_${index + 1}.png`;
             }
 
-            // Sanitize filename
-            const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+            // Sanitize filename with proper extension
+            const sanitizedFilename = sanitizeFilename(filename, index, 'png');
             console.log(`✅ SVG converted to PNG: ${sanitizedFilename}, Size: ${pngBlob.size}`);
 
             zip.file(sanitizedFilename, pngBlob);
             processedCount++;
           } catch (svgError) {
             console.warn(`⚠️ SVG conversion failed for ${download.filename}, using original: ${svgError.message}`);
-            // Fallback: add original SVG
-            const sanitizedFilename = download.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+            // Fallback: add original SVG with sanitized filename
+            const sanitizedFilename = sanitizeFilename(download.filename, index, 'svg');
             zip.file(sanitizedFilename, blob);
             processedCount++;
           }
         } else {
-          // Regular image
-          const sanitizedFilename = download.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+          // Regular image - determine extension from MIME type or filename
+          let extension = '';
+          if (download.filename.includes('.')) {
+            const parts = download.filename.split('.');
+            extension = parts.pop();
+          } else if (blob.type) {
+            // Extract extension from MIME type
+            const mimeToExt = {
+              'image/jpeg': 'jpg',
+              'image/jpg': 'jpg',
+              'image/png': 'png',
+              'image/gif': 'gif',
+              'image/bmp': 'bmp',
+              'image/webp': 'webp',
+              'image/svg+xml': 'svg'
+            };
+            extension = mimeToExt[blob.type] || '';
+          }
+          
+          // Sanitize filename with proper extension
+          const sanitizedFilename = sanitizeFilename(download.filename, index, extension);
           console.log(`✅ Adding to ZIP: ${sanitizedFilename}, Size: ${blob.size}`);
 
           zip.file(sanitizedFilename, blob);
@@ -386,7 +515,25 @@ export const createImageZip = async (images) => {
         return;
       }
 
-      const sanitizedFilename = image.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+      // Determine extension from MIME type or filename
+      let extension = '';
+      if (image.filename.includes('.')) {
+        const parts = image.filename.split('.');
+        extension = parts.pop();
+      } else if (image.blob.type) {
+        const mimeToExt = {
+          'image/jpeg': 'jpg',
+          'image/jpg': 'jpg',
+          'image/png': 'png',
+          'image/gif': 'gif',
+          'image/bmp': 'bmp',
+          'image/webp': 'webp',
+          'image/svg+xml': 'svg'
+        };
+        extension = mimeToExt[image.blob.type] || '';
+      }
+
+      const sanitizedFilename = sanitizeFilename(image.filename, index, extension);
       zip.file(sanitizedFilename, image.blob);
       console.log(`Added to ZIP: ${sanitizedFilename}`);
     });
