@@ -4,6 +4,24 @@ import api, { endpoints } from "../../../utils/api";
 import { handleError, showSuccess } from "../../../utils/errorHandler";
 
 /**
+ * Generate or retrieve anonymous session ID
+ */
+const getAnonymousSessionId = () => {
+  let sessionId = sessionStorage.getItem('bulkload_anonymous_session');
+  
+  if (!sessionId) {
+    // Generate new session ID
+    sessionId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    sessionStorage.setItem('bulkload_anonymous_session', sessionId);
+    console.log('🆔 Generated new anonymous session ID:', sessionId);
+  } else {
+    console.log('🆔 Using existing anonymous session ID:', sessionId);
+  }
+  
+  return sessionId;
+};
+
+/**
  * Custom hook for managing user data, stats, and subscription information
  * @returns {Object} User data state and methods
  */
@@ -13,6 +31,15 @@ export const useUserData = () => {
   const [remainingDownloads, setRemainingDownloads] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [anonymousSessionId, setAnonymousSessionId] = useState(null);
+
+  // Initialize anonymous session ID on mount
+  useEffect(() => {
+    if (!isAuthenticated) {
+      const sessionId = getAnonymousSessionId();
+      setAnonymousSessionId(sessionId);
+    }
+  }, [isAuthenticated]);
 
   /**
    * Fetch user statistics
@@ -53,6 +80,7 @@ export const useUserData = () => {
 
       console.log("=== FETCH REMAINING DOWNLOADS DEBUG ===");
       console.log("isAuthenticated:", isAuthenticated);
+      console.log("Anonymous session ID:", anonymousSessionId);
 
       // Reset while fetching to avoid showing stale data
       setRemainingDownloads(null);
@@ -63,8 +91,13 @@ export const useUserData = () => {
         console.log("✅ Authenticated user download response:", response.data);
         setRemainingDownloads(response.data);
       } else {
-        console.log("Anonymous user, fetching download count");
-        const response = await api.get(endpoints.download.remaining);
+        console.log("Anonymous user, fetching download count with session ID");
+        
+        // Use session ID instead of relying on IP
+        const response = await api.post(endpoints.download.remaining, {
+          sessionId: anonymousSessionId
+        });
+        
         console.log("✅ Anonymous user download response:", response.data);
         setRemainingDownloads(response.data);
       }
@@ -87,7 +120,7 @@ export const useUserData = () => {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, anonymousSessionId]);
 
   /**
    * Refresh all user data
@@ -177,6 +210,7 @@ export const useUserData = () => {
     remainingDownloads,
     loading,
     error,
+    anonymousSessionId,
 
     // Methods
     fetchUserStats,

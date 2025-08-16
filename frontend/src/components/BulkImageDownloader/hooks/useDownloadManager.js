@@ -23,9 +23,10 @@ export const useDownloadManager = () => {
    * @param {Array} urls - Array of image URLs to download
    * @param {Function} onSuccess - Callback function called on successful download
    * @param {Function} onError - Callback function called on error
+   * @param {string} anonymousSessionId - Session ID for anonymous users
    */
   const downloadViaBackend = useCallback(
-    async (urls, onSuccess, onError) => {
+    async (urls, onSuccess, onError, anonymousSessionId = null) => {
       if (!urls || urls.length === 0) {
         const errorMsg = "Please enter at least one URL";
         setError(errorMsg);
@@ -39,6 +40,14 @@ export const useDownloadManager = () => {
       setError("");
 
       try {
+        // Prepare request payload
+        const payload = { urls };
+        
+        // Include session ID for anonymous users
+        if (!isAuthenticated && anonymousSessionId) {
+          payload.sessionId = anonymousSessionId;
+        }
+
         // Include auth token if user is authenticated
         const config = {};
         if (isAuthenticated) {
@@ -52,9 +61,7 @@ export const useDownloadManager = () => {
 
         const response = await api.post(
           endpoints.download.images,
-          {
-            urls: urls,
-          },
+          payload,
           config
         );
 

@@ -154,9 +154,9 @@ const BulkImageDownloader = () => {
     }
 
     try {
-      const result = await downloadManager.downloadViaBackend(
-        urlList,
-                 // Success callback
+             const result = await downloadManager.downloadViaBackend(
+         urlList,
+         // Success callback
          (downloadResult) => {
            // Add to download history
            downloadHistory.addDownloadEntry({
@@ -178,11 +178,13 @@ const BulkImageDownloader = () => {
              );
            }
          },
-        // Error callback
-        (errorInfo) => {
-          console.error("Download failed:", errorInfo);
-        }
-      );
+         // Error callback
+         (errorInfo) => {
+           console.error("Download failed:", errorInfo);
+         },
+         // Pass anonymous session ID for anonymous users
+         userData.anonymousSessionId
+       );
 
       return result;
     } catch (error) {

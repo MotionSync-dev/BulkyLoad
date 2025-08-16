@@ -19,7 +19,7 @@ router.post('/images', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'Maximum 50 URLs allowed per request' });
     }
 
-        // Check download limits for authenticated users
+    // Check download limits for authenticated users
     if (req.user) {
       const user = await User.findById(req.user.userId);
       if (user) {
@@ -45,15 +45,21 @@ router.post('/images', optionalAuth, async (req, res) => {
         // Note: Download count will be updated after successful downloads at the end of the function
       }
     } else {
-      // For unauthenticated users, implement IP-based tracking
-      const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+      // For unauthenticated users, use session-based tracking
+      const { sessionId } = req.body;
       
-      // Get or create anonymous user session
-      let anonymousSession = await AnonymousSession.findOne({ ip: clientIP });
+      if (!sessionId) {
+        return res.status(400).json({ 
+          error: 'Session ID required for anonymous users' 
+        });
+      }
+      
+      // Get or create anonymous user session by session ID
+      let anonymousSession = await AnonymousSession.findOne({ sessionId });
       
       if (!anonymousSession) {
         anonymousSession = new AnonymousSession({
-          ip: clientIP,
+          sessionId,
           dailyDownloads: { count: 0, resetDate: new Date() }
         });
       }
@@ -114,124 +120,61 @@ router.post('/images', optionalAuth, async (req, res) => {
               return status >= 200 && status < 400; // Accept redirects
             }
           });
-        } catch (error) {
-          // If CORS error or other failure, try using CORS proxy
-          if (error.code === 'ERR_NETWORK' || error.response?.status === 403 || error.message.includes('CORS')) {
-            console.log(`Direct download failed for ${url}, trying CORS proxy...`);
-            
-            // List of CORS proxies to try
-            const corsProxies = [
-              'https://corsproxy.io/?',
-              'https://api.allorigins.win/raw?url=',
-              'https://api.codetabs.com/v1/proxy?quest='
-            ];
-            
-            let proxySuccess = false;
-            
-            // Try each proxy until one works
-            for (const proxy of corsProxies) {
-              try {
-                const proxyUrl = proxy + encodeURIComponent(url);
-                console.log(`Trying proxy: ${proxyUrl}`);
-                
-                response = await axios.get(proxyUrl, {
-                  responseType: isSvg ? 'text' : 'arraybuffer',
-                  timeout: 30000,
-                  maxContentLength: 10 * 1024 * 1024,
-                  headers: {
-                    'Accept': isSvg ? 'image/svg+xml,text/plain' : 'image/*,application/octet-stream',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Referer': url
-                  },
-                  // Follow redirects for image URLs
-                  maxRedirects: 5,
-                  validateStatus: function (status) {
-                    return status >= 200 && status < 400; // Accept redirects
-                  }
-                });
-                
-                console.log(`Proxy download successful for ${url}`);
-                proxySuccess = true;
-                break;
-              } catch (proxyError) {
-                console.log(`Proxy ${proxy} failed:`, proxyError.message);
-                continue;
-              }
-            }
-            
-            // If all proxies fail, throw the original error
-            if (!proxySuccess) {
-              console.log(`All proxies failed for ${url}`);
-              throw error;
-            }
-          } else {
-            // For non-CORS errors, throw immediately
-            throw error;
-          }
+        } catch (downloadError) {
+          console.error(`Failed to download ${url}:`, downloadError.message);
+          results.push({
+            url,
+            success: false,
+            error: 'Failed to download image'
+          });
+          continue;
         }
 
-        const contentType = response.headers['content-type'];
-        
-        // Debug logging for content type and response
-        console.log(`Download debug for ${url}:`, {
-          contentType,
-          contentLength: response.headers['content-length'],
-          responseSize: response.data.length,
-          isSvg
-        });
-        
-                 // For SVG files, check if content is valid
-         if (isSvg) {
-           const svgContent = response.data;
-           if (!svgContent || svgContent.length === 0) {
-             results.push({
-               url,
-               success: false,
-               error: 'Empty SVG content'
-             });
-             continue;
-           }
-           
-           // Check if it's actually SVG content
-           if (!svgContent.includes('<svg') && !svgContent.includes('<?xml')) {
-             results.push({
-               url,
-               success: false,
-               error: 'Invalid SVG content'
-             });
-             continue;
-           }
-           
-           // For SVG files, we'll send the SVG content as-is
-           // The frontend will handle the conversion to PNG
-           const base64 = Buffer.from(svgContent, 'utf8').toString('base64');
-           const dataUrl = `data:${contentType};base64,${base64}`;
-           
-           // Generate filename for SVG (will be converted to PNG by frontend)
-           let filename = url.split('/').pop() || `image-${i + 1}.svg`;
-           if (!filename.toLowerCase().endsWith('.svg')) {
-             filename = `image-${i + 1}.svg`;
-           }
-           
-           // Sanitize filename to avoid ZIP issues
-           filename = filename.replace(/[?&=]/g, '_');
+        // Process the downloaded image
+        if (response.status === 200) {
+          let contentType = response.headers['content-type'] || '';
+          let contentLength = response.headers['content-length'];
+          
+          console.log(`Processing ${url}:`, {
+            contentType,
+            contentLength,
+            responseSize: response.data.length || response.data.byteLength,
+            isSvg
+          });
 
-           successfulDownloads.push({
-             url,
-             filename,
-             dataUrl,
-             size: svgContent.length,
-             isSvg: true // Flag to indicate this is an SVG that needs conversion
-           });
+          // Handle SVG files
+          if (isSvg) {
+            if (typeof response.data === 'string' && response.data.includes('<svg')) {
+              // Valid SVG content
+              const filename = url.split('/').pop().split('?')[0] || 'image.svg';
+              if (!filename.endsWith('.svg')) {
+                filename = filename + '.svg';
+              }
+              
+              successfulDownloads.push({
+                filename,
+                size: response.data.length,
+                dataUrl: `data:image/svg+xml;base64,${Buffer.from(response.data).toString('base64')}`,
+                isSvg: true
+              });
+              
+              results.push({
+                url,
+                success: true,
+                filename,
+                size: response.data.length,
+                contentType: 'image/svg+xml'
+              });
+            } else {
+              results.push({
+                url,
+                success: false,
+                error: 'Invalid SVG content'
+              });
+            }
+            continue;
+          }
 
-           results.push({
-             url,
-             success: true,
-             filename,
-             size: svgContent.length
-           });
-           
-         } else {
           // Handle regular images - be more flexible with content types
           if (!contentType.startsWith('image/') && !contentType.includes('octet-stream')) {
             // Try to detect if it's actually an image by checking the first few bytes
@@ -257,46 +200,46 @@ router.post('/images', optionalAuth, async (req, res) => {
             else if (isWebP) contentType = 'image/webp';
           }
 
-          // Convert to base64
-          const base64 = Buffer.from(response.data, 'binary').toString('base64');
-          const dataUrl = `data:${contentType};base64,${base64}`;
-
           // Generate filename - handle Unsplash and other complex URLs better
           let filename = '';
-          
-          // Try to extract filename from URL path
           const urlPath = url.split('?')[0]; // Remove query parameters
           const pathParts = urlPath.split('/');
           const lastPart = pathParts[pathParts.length - 1];
           
           if (lastPart && lastPart.includes('.')) {
-            // URL has a filename with extension
             filename = lastPart;
           } else if (lastPart && lastPart.length > 0) {
-            // URL has a name but no extension
             const extension = contentType.split('/')[1] || 'jpg';
             filename = `${lastPart}.${extension}`;
           } else {
-            // Generate generic filename
             const extension = contentType.split('/')[1] || 'jpg';
             filename = `image-${i + 1}.${extension}`;
           }
-          
-          // Sanitize filename to avoid ZIP issues
-          filename = filename.replace(/[?&=]/g, '_');
+
+          // Create data URL for the image
+          const base64 = Buffer.from(response.data).toString('base64');
+          const dataUrl = `data:${contentType};base64,${base64}`;
 
           successfulDownloads.push({
-            url,
             filename,
+            size: response.data.byteLength || response.data.length,
             dataUrl,
-            size: response.data.length
+            isSvg: false
           });
 
           results.push({
             url,
             success: true,
             filename,
-            size: response.data.length
+            size: response.data.byteLength || response.data.length,
+            contentType
+          });
+
+        } else {
+          results.push({
+            url,
+            success: false,
+            error: `HTTP ${response.status}`
           });
         }
 
@@ -312,8 +255,8 @@ router.post('/images', optionalAuth, async (req, res) => {
 
     // Update download count for anonymous users
     if (!req.user) {
-      const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
-      let anonymousSession = await AnonymousSession.findOne({ ip: clientIP });
+      const { sessionId } = req.body;
+      let anonymousSession = await AnonymousSession.findOne({ sessionId });
       
       if (anonymousSession) {
         const successfulCount = results.filter(r => r.success).length;
@@ -324,7 +267,7 @@ router.post('/images', optionalAuth, async (req, res) => {
           await anonymousSession.save();
           
           console.log('Anonymous download count after update:', {
-            ip: clientIP,
+            sessionId,
             dailyCount: anonymousSession.dailyDownloads.count,
             resetDate: anonymousSession.dailyDownloads.resetDate,
             successfulDownloads: successfulCount,
@@ -368,25 +311,25 @@ router.post('/images', optionalAuth, async (req, res) => {
       }
     }
 
-         console.log('Sending response with successful downloads:', successfulDownloads.length)
-     successfulDownloads.forEach((download, index) => {
-       console.log(`Download ${index + 1}:`, {
-         filename: download.filename,
-         size: download.size,
-         dataUrlLength: download.dataUrl.length
-       })
-     })
+    console.log('Sending response with successful downloads:', successfulDownloads.length);
+    successfulDownloads.forEach((download, index) => {
+      console.log(`Download ${index + 1}:`, {
+        filename: download.filename,
+        size: download.size,
+        dataUrlLength: download.dataUrl.length
+      });
+    });
 
-     res.json({
-       message: 'Download completed',
-       results,
-       summary: {
-         total: urls.length,
-         successful: results.filter(r => r.success).length,
-         failed: results.filter(r => !r.success).length
-       },
-       downloads: successfulDownloads
-     });
+    res.json({
+      message: 'Download completed',
+      results,
+      summary: {
+        total: urls.length,
+        successful: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length
+      },
+      downloads: successfulDownloads
+    });
 
   } catch (error) {
     console.error('Download error:', error);
@@ -459,87 +402,81 @@ router.get('/debug-user/:email', async (req, res) => {
   }
 });
 
-// Get remaining downloads for both authenticated and anonymous users
-router.get('/remaining', optionalAuth, async (req, res) => {
+// Get remaining downloads endpoint
+router.get('/remaining', authenticateToken, async (req, res) => {
   try {
-    console.log('Remaining downloads endpoint hit:', {
-      hasUser: !!req.user,
-      userId: req.user?.userId,
-      headers: req.headers.authorization ? 'Bearer token present' : 'No auth header'
-    });
-
-    if (req.user) {
-      // For authenticated users
-      const user = await User.findById(req.user.userId);
-      if (!user) {
-        console.log('User not found for ID:', req.user.userId);
-        return res.status(404).json({ error: 'User not found' });
-      }
-
-      // Check download limits and subscription status
-      const downloadCheck = await user.canDownload(0);
-      console.log('Remaining downloads check for user:', {
-        userId: user._id,
-        email: user.email,
-        subscription: user.subscription,
-        dailyCount: user.dailyDownloads.count,
-        downloadCheck
-      });
-
-      res.json({
-        isAuthenticated: true,
-        userType: downloadCheck.userType,
-        current: downloadCheck.current,
-        remaining: downloadCheck.remaining,
-        limit: downloadCheck.limit
-      });
-    } else {
-      // For anonymous users
-      const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
-      
-      let anonymousSession = await AnonymousSession.findOne({ ip: clientIP });
-      
-      if (!anonymousSession) {
-        // Create new session if doesn't exist
-        anonymousSession = new AnonymousSession({
-          ip: clientIP,
-          dailyDownloads: { count: 0, resetDate: new Date() }
-        });
-        await anonymousSession.save();
-      }
-      
-      // Check if it's a new day
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const resetDate = new Date(anonymousSession.dailyDownloads.resetDate);
-      resetDate.setHours(0, 0, 0, 0);
-      
-      if (today.getTime() !== resetDate.getTime()) {
-        anonymousSession.dailyDownloads.count = 0;
-        anonymousSession.dailyDownloads.resetDate = new Date();
-        await anonymousSession.save();
-      }
-
-      const limit = 5; // Anonymous limit
-      const current = anonymousSession.dailyDownloads.count;
-      const remaining = Math.max(0, limit - current);
-
-      console.log('Remaining downloads check for anonymous:', {
-        ip: clientIP,
-        current,
-        remaining,
-        limit,
-        resetDate: anonymousSession.dailyDownloads.resetDate
-      });
-      
-      res.json({
-        isAuthenticated: false,
-        userType: 'anonymous',
-        current,
-        remaining,
-        limit
-      });
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
+
+    const limitCheck = await user.canDownload(0);
+    
+    res.json({
+      isAuthenticated: true,
+      userType: limitCheck.userType,
+      current: limitCheck.current,
+      remaining: limitCheck.remaining,
+      limit: limitCheck.limit,
+      resetDate: limitCheck.resetDate
+    });
+  } catch (error) {
+    console.error('Remaining downloads error:', error);
+    res.status(500).json({ error: 'Failed to get remaining downloads' });
+  }
+});
+
+// Get remaining downloads for anonymous users (now using session ID)
+router.post('/remaining', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID required' });
+    }
+
+    let anonymousSession = await AnonymousSession.findOne({ sessionId });
+    
+    if (!anonymousSession) {
+      // Create new session if none exists
+      anonymousSession = new AnonymousSession({
+        sessionId,
+        dailyDownloads: { count: 0, resetDate: new Date() }
+      });
+      await anonymousSession.save();
+    }
+    
+    // Check if it's a new day
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const resetDate = new Date(anonymousSession.dailyDownloads.resetDate);
+    resetDate.setHours(0, 0, 0, 0);
+    
+    if (today.getTime() !== resetDate.getTime()) {
+      anonymousSession.dailyDownloads.count = 0;
+      anonymousSession.dailyDownloads.resetDate = new Date();
+      await anonymousSession.save();
+    }
+
+    const limit = 5; // Anonymous limit
+    const current = anonymousSession.dailyDownloads.count;
+    const remaining = Math.max(0, limit - current);
+
+    console.log('Remaining downloads check for anonymous:', {
+      sessionId,
+      current,
+      remaining,
+      limit,
+      resetDate: anonymousSession.dailyDownloads.resetDate
+    });
+    
+    res.json({
+      isAuthenticated: false,
+      userType: 'anonymous',
+      current,
+      remaining,
+      limit
+    });
   } catch (error) {
     console.error('Remaining downloads error:', error);
     res.status(500).json({ error: 'Failed to get remaining downloads' });
