@@ -15,8 +15,34 @@ router.post('/images', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'Please provide an array of image URLs' });
     }
 
-    if (urls.length > 50) {
-      return res.status(400).json({ error: 'Maximum 50 URLs allowed per request' });
+    // Dynamic URL limit based on user type
+    let maxUrlsPerRequest = 50; // Default limit
+    
+    if (req.user) {
+      const user = await User.findById(req.user.userId);
+      if (user && user.subscription && user.subscription.status === 'pro') {
+        maxUrlsPerRequest = 200; // Pro users can download up to 200 URLs at once
+      } else if (user) {
+        maxUrlsPerRequest = 100; // Registered users can download up to 100 URLs at once
+      }
+    } else {
+      maxUrlsPerRequest = 50; // Anonymous users limited to 50 URLs
+    }
+
+    if (urls.length > maxUrlsPerRequest) {
+      const userType = req.user ? 'registered' : 'anonymous';
+      const limitText = req.user && req.user.subscription && req.user.subscription.status === 'pro' 
+        ? '200 URLs' 
+        : req.user 
+        ? '100 URLs' 
+        : '50 URLs';
+        
+      return res.status(400).json({ 
+        error: `Maximum ${limitText} allowed per request. You requested ${urls.length} URLs.`,
+        maxAllowed: maxUrlsPerRequest,
+        requested: urls.length,
+        userType: userType
+      });
     }
 
     // Check download limits for authenticated users

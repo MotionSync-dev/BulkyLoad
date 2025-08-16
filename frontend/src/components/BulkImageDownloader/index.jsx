@@ -297,8 +297,18 @@ const BulkImageDownloader = () => {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                 <div className="text-sm text-gray-600">
                   {urls.split("\n").filter((url) => url.trim()).length} URLs
-                  entered
                 </div>
+                <div className="text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded">
+                  💡{" "}
+                  {userData.isProUser
+                    ? "Pro: Up to 200 URLs per request"
+                    : userData.isAuthenticated
+                    ? "Registered: Up to 100 URLs per request"
+                    : "Anonymous: Up to 50 URLs per request"}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                 <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                   <button
                     onClick={validateUrlsLocally}
@@ -456,6 +466,24 @@ const BulkImageDownloader = () => {
                   <span className="font-medium">
                     {userData.downloadInfo.limit}
                   </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">URLs per Request:</span>
+                  <span className="font-medium text-blue-600">
+                    {userData.isProUser
+                      ? "200"
+                      : userData.isAuthenticated
+                      ? "100"
+                      : "50"}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                  💡{" "}
+                  {userData.isProUser
+                    ? "Pro users can download up to 200 URLs at once"
+                    : userData.isAuthenticated
+                    ? "Registered users can download up to 100 URLs at once"
+                    : "Anonymous users can download up to 50 URLs at once"}
                 </div>
               </div>
             ) : (
