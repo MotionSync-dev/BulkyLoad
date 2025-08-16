@@ -156,28 +156,28 @@ const BulkImageDownloader = () => {
     try {
       const result = await downloadManager.downloadViaBackend(
         urlList,
-        // Success callback
-        (downloadResult) => {
-                   // Add to download history
-         downloadHistory.addDownloadEntry({
-           totalCount: urlList.length,
-           successCount: downloadResult.summary?.successful || 0,
-           failedCount: downloadResult.summary?.failed || 0,
-           results: downloadResult.results || [],
-           urls: urlList, // Add the URLs to the history
-         });
+                 // Success callback
+         (downloadResult) => {
+           // Add to download history
+           downloadHistory.addDownloadEntry({
+             totalCount: urlList.length,
+             successCount: downloadResult.summary?.successful || 0,
+             failedCount: downloadResult.summary?.failed || 0,
+             results: downloadResult.results || [],
+             urls: urlList, // Add the URLs to the history
+           });
 
-          // Refresh user data
-          userData.refreshUserData();
+           // Refresh user data (for both authenticated and anonymous users)
+           userData.refreshUserData();
 
-          // Show success message - only if we actually have successful downloads
-          const successfulCount = downloadResult.summary?.successful || 0;
-          if (successfulCount > 0) {
-            showSuccess(
-              `Download completed! ${successfulCount} images downloaded.`
-            );
-          }
-        },
+           // Show success message - only if we actually have successful downloads
+           const successfulCount = downloadResult.summary?.successful || 0;
+           if (successfulCount > 0) {
+             showSuccess(
+               `Download completed! ${successfulCount} images downloaded.`
+             );
+           }
+         },
         // Error callback
         (errorInfo) => {
           console.error("Download failed:", errorInfo);
@@ -382,9 +382,8 @@ const BulkImageDownloader = () => {
           )}
         </div>
 
-                 {/* Right Column - Stats & History */}
-         <div className="space-y-6">
-
+        {/* Right Column - Stats & History */}
+        <div className="space-y-6">
           {/* Subscription Status */}
           {isAuthenticated && (
             <div className="card">
@@ -485,7 +484,6 @@ const BulkImageDownloader = () => {
                 <Trash2 className="w-4 h-4" />
                 <span>Clear History</span>
               </button>
-              
             </div>
           </div>
         </div>
@@ -507,60 +505,69 @@ const BulkImageDownloader = () => {
               </button>
             </div>
 
-                         <div className="overflow-x-auto">
-               <div className="space-y-4">
-                 {downloadHistory.getRecentDownloads(10).map((item, index) => (
-                   <div key={item.id} className="bg-gray-50 rounded-lg p-4">
-                     <div className="flex items-center justify-between mb-3">
-                       <span className="text-sm font-medium text-gray-900">
-                         Download #{item.id}
-                       </span>
-                       <span className="text-xs text-gray-500">
-                         {new Date(item.timestamp).toLocaleDateString()}
-                       </span>
-                     </div>
-                     
-                     {/* Download Summary */}
-                     <div className="grid grid-cols-3 gap-4 mb-3 text-sm">
-                       <div className="text-center">
-                         <div className="text-gray-600">Total</div>
-                         <div className="font-medium">{item.totalCount}</div>
-                       </div>
-                       <div className="text-center">
-                         <div className="text-gray-600">Success</div>
-                         <div className="font-medium text-green-600">{item.successCount}</div>
-                       </div>
-                       <div className="text-center">
-                         <div className="text-gray-600">Failed</div>
-                         <div className="font-medium text-red-600">{item.failedCount}</div>
-                       </div>
-                     </div>
-                     
-                     {/* Image URLs */}
-                     {item.urls && item.urls.length > 0 && (
-                       <div className="space-y-2">
-                         <div className="text-sm font-medium text-gray-700">Downloaded Images:</div>
-                         <div className="max-h-32 overflow-y-auto space-y-1">
-                           {item.urls.map((url, urlIndex) => (
-                             <div key={urlIndex} className="text-xs text-gray-600 bg-white p-2 rounded border truncate">
-                               <a 
-                                 href={url} 
-                                 target="_blank" 
-                                 rel="noopener noreferrer"
-                                 className="hover:text-primary-600 hover:underline break-all"
-                                 title={url}
-                               >
-                                 {url}
-                               </a>
-                             </div>
-                           ))}
-                         </div>
-                       </div>
-                     )}
-                   </div>
-                 ))}
-               </div>
-             </div>
+            <div className="overflow-x-auto">
+              <div className="space-y-4">
+                {downloadHistory.getRecentDownloads(10).map((item, index) => (
+                  <div key={item.id} className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-gray-900">
+                        Download #{item.id}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(item.timestamp).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    {/* Download Summary */}
+                    <div className="grid grid-cols-3 gap-4 mb-3 text-sm">
+                      <div className="text-center">
+                        <div className="text-gray-600">Total</div>
+                        <div className="font-medium">{item.totalCount}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-600">Success</div>
+                        <div className="font-medium text-green-600">
+                          {item.successCount}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-600">Failed</div>
+                        <div className="font-medium text-red-600">
+                          {item.failedCount}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Image URLs */}
+                    {item.urls && item.urls.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium text-gray-700">
+                          Downloaded Images:
+                        </div>
+                        <div className="max-h-32 overflow-y-auto space-y-1">
+                          {item.urls.map((url, urlIndex) => (
+                            <div
+                              key={urlIndex}
+                              className="text-xs text-gray-600 bg-white p-2 rounded border truncate"
+                            >
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-primary-600 hover:underline break-all"
+                                title={url}
+                              >
+                                {url}
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

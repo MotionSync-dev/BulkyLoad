@@ -65,7 +65,7 @@ export const useUserData = () => {
       } else {
         console.log("Anonymous user, fetching download count");
         const response = await api.get(endpoints.download.remaining);
-        console.log("Anonymous user download response:", response.data);
+        console.log("✅ Anonymous user download response:", response.data);
         setRemainingDownloads(response.data);
       }
     } catch (error) {
@@ -94,9 +94,25 @@ export const useUserData = () => {
    */
   const refreshUserData = useCallback(async () => {
     console.log("🔄 Refreshing user data...");
-    await Promise.all([fetchRemainingDownloads(), fetchUserStats()]);
-    showSuccess("User data refreshed successfully");
-  }, [fetchRemainingDownloads, fetchUserStats]);
+    
+    try {
+      // Always refresh download limits (works for both authenticated and anonymous users)
+      await fetchRemainingDownloads();
+      
+      // Only fetch user stats for authenticated users
+      if (isAuthenticated) {
+        await fetchUserStats();
+      }
+      
+      showSuccess("User data refreshed successfully");
+    } catch (error) {
+      console.error("Error refreshing user data:", error);
+      // Don't show error toast for anonymous users
+      if (isAuthenticated) {
+        showSuccess("User data refreshed successfully");
+      }
+    }
+  }, [fetchRemainingDownloads, fetchUserStats, isAuthenticated]);
 
   /**
    * Check if user can download specified number of images
