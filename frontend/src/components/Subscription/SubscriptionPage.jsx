@@ -265,7 +265,8 @@ const SubscriptionPage = () => {
                       Manage on Gumroad
                     </h4>
                     <p className="text-sm text-blue-700 mb-3">
-                      To cancel or modify your subscription, you'll need to access your Gumroad account where you made the purchase.
+                      To cancel or modify your subscription, you'll need to
+                      access your Gumroad account where you made the purchase.
                     </p>
                     <div className="space-y-2">
                       <a
@@ -278,7 +279,8 @@ const SubscriptionPage = () => {
                         <ExternalLink className="w-4 h-4" />
                       </a>
                       <p className="text-xs text-blue-600">
-                        After logging in, go to "My Library" → Find "BulkyLoad Pro" → Click "Manage Subscription"
+                        After logging in, go to "My Library" → Find "BulkyLoad
+                        Pro" → Click "Manage Subscription"
                       </p>
                     </div>
                   </div>
@@ -295,9 +297,12 @@ const SubscriptionPage = () => {
                       How to Cancel
                     </h4>
                     <p className="text-sm text-green-700">
-                      1. Login to Gumroad at gumroad.com/login<br/>
-                      2. Go to "My Library" in your account<br/>
-                      3. Find "BulkyLoad Pro" subscription<br/>
+                      1. Login to Gumroad at gumroad.com/login
+                      <br />
+                      2. Go to "My Library" in your account
+                      <br />
+                      3. Find "BulkyLoad Pro" subscription
+                      <br />
                       4. Click "Manage Subscription" → "Cancel Subscription"
                     </p>
                   </div>
@@ -314,7 +319,9 @@ const SubscriptionPage = () => {
                       Don't Have a Gumroad Account?
                     </h4>
                     <p className="text-sm text-purple-700 mb-2">
-                      If you subscribed but don't have a Gumroad account yet, you can create one using the same email address you used for the subscription.
+                      If you subscribed but don't have a Gumroad account yet,
+                      you can create one using the same email address you used
+                      for the subscription.
                     </p>
                     <a
                       href="https://gumroad.com/signup"

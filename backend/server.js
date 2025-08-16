@@ -63,6 +63,78 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Enhanced security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'", "https://gumroad.com"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === "production" ? [] : []
+    }
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  frameguard: { action: "deny" },
+  noSniff: true,
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
+}));
+
+// Additional security headers
+app.use((req, res, next) => {
+  // X-Frame-Options: DENY (clickjacking protection)
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // X-Content-Type-Options: nosniff (MIME type sniffing protection)
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // X-XSS-Protection: 1; mode=block (XSS protection)
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  // Permissions-Policy (feature policy)
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  
+  next();
+});
+
+// Request logging middleware for production
+if (process.env.NODE_ENV === "production") {
+  app.use((req, res, next) => {
+    const start = Date.now();
+    
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const logData = {
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        url: req.url,
+        status: res.statusCode,
+        duration: `${duration}ms`,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        referer: req.get('Referer')
+      };
+      
+      // Log in structured format for production
+      if (res.statusCode >= 400) {
+        console.error('🚨 Error Request:', JSON.stringify(logData));
+      } else {
+        console.log('📝 Request:', JSON.stringify(logData));
+      }
+    });
+    
+    next();
+  });
+}
+
 // Handle preflight requests explicitly for all API routes
 app.options("*", cors(corsOptions));
 
