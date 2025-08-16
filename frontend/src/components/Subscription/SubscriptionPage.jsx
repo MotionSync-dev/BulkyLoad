@@ -171,19 +171,19 @@ const SubscriptionPage = () => {
                   </li>
                   <li className="flex items-center space-x-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span>Priority processing</span>
+                    <span>Download history</span>
                   </li>
                   <li className="flex items-center space-x-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span>Download analytics</span>
+                    <span>Advanced image formats</span>
                   </li>
                   <li className="flex items-center space-x-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span>Custom file naming</span>
+                    <span>ZIP downloads</span>
                   </li>
                   <li className="flex items-center space-x-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span>Premium support</span>
+                    <span>All image types (BMP, TIFF, WebP, SVG)</span>
                   </li>
                 </ul>
               </div>
