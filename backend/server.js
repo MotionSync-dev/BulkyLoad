@@ -27,9 +27,8 @@ const corsOrigins =
   process.env.NODE_ENV === "production"
     ? [
         process.env.CORS_ORIGIN,
-        "https://bulkload.vercel.app",
-        "https://bulkload-mustafa-yassins-projects.vercel.app",
-        "https://bulkload-7aqr60obd-mustafa-yassins-projects.vercel.app",
+        // Add your actual Vercel domain here
+        // "https://your-actual-domain.vercel.app",
       ].filter(Boolean)
     : ["http://localhost:5173", "http://localhost:3000"];
 
