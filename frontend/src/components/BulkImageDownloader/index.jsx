@@ -3,7 +3,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useUserData } from "./hooks/useUserData";
 import { useDownloadHistory } from "./hooks/useDownloadHistory";
 import { useDownloadManager } from "./hooks/useDownloadManager";
-import { validateUrls } from "../../utils/errorHandler";
 import { showSuccess, showError } from "../../utils/errorHandler";
 import api, { endpoints } from "../../utils/api";
 import {
@@ -192,7 +191,7 @@ const BulkImageDownloader = () => {
     }
   };
 
-  const validateUrls = async () => {
+  const validateUrlsLocally = async () => {
     const urlList = urls
       .split("\n")
       .map((url) => url.trim())
@@ -302,7 +301,7 @@ const BulkImageDownloader = () => {
                 </div>
                 <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                   <button
-                    onClick={validateUrls}
+                    onClick={validateUrlsLocally}
                     disabled={!urls.trim() || downloadManager.isDownloading}
                     className="btn-secondary text-sm px-3 py-2"
                   >
