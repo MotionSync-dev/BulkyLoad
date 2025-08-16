@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import BulkImageDownloader from './components/BulkImageDownloader';
+import HomePage from './components/HomePage/HomePage';
 import AuthPage from './components/Auth/AuthPage';
 import UserProfile from './components/User/UserProfile';
 import SubscriptionPage from './components/Subscription/SubscriptionPage';
@@ -241,15 +242,23 @@ const AppContent = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/auth" element={<AuthPage />} />
         <Route 
           path="/" 
+          element={
+            <MainLayout>
+              <HomePage />
+            </MainLayout>
+          } 
+        />
+        <Route 
+          path="/download" 
           element={
             <MainLayout>
               <BulkImageDownloader />
             </MainLayout>
           } 
         />
+        <Route path="/auth" element={<AuthPage />} />
         <Route 
           path="/profile" 
           element={
