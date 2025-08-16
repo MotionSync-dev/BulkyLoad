@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Crown, CheckCircle, XCircle, ExternalLink, Calendar, CreditCard, RefreshCw } from 'lucide-react';
+import { Crown, CheckCircle, XCircle, ExternalLink, Calendar, CreditCard, RefreshCw, Clock, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 
@@ -11,6 +11,7 @@ const SubscriptionPage = () => {
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(true);
   const [gumroadInfo, setGumroadInfo] = useState(null);
+  const [hasSubscribed, setHasSubscribed] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -20,7 +21,32 @@ const SubscriptionPage = () => {
 
     fetchSubscriptionStatus();
     fetchGumroadInfo();
+    
+    // Check if user recently subscribed (check localStorage)
+    const recentlySubscribed = localStorage.getItem('bulkload_recently_subscribed');
+    if (recentlySubscribed) {
+      setHasSubscribed(true);
+    }
   }, [isAuthenticated, navigate]);
+
+  // Auto-refresh subscription status when processing
+  useEffect(() => {
+    let interval;
+    
+    if (getSubscriptionStatus() === 'processing') {
+      // Auto-refresh every 30 seconds when processing
+      interval = setInterval(() => {
+        console.log('Auto-refreshing subscription status...');
+        fetchSubscriptionStatus();
+      }, 30000); // 30 seconds
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [getSubscriptionStatus()]);
 
   const fetchSubscriptionStatus = async () => {
     try {
@@ -29,6 +55,12 @@ const SubscriptionPage = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSubscription(response.data.subscription);
+      
+      // If status is now pro, remove the "recently subscribed" flag
+      if (response.data.subscription?.status === 'pro') {
+        localStorage.removeItem('bulkload_recently_subscribed');
+        setHasSubscribed(false);
+      }
     } catch (error) {
       console.error('Failed to fetch subscription status:', error);
       toast.error('Failed to load subscription status');
@@ -48,6 +80,13 @@ const SubscriptionPage = () => {
 
   const handleSubscribe = () => {
     if (gumroadInfo?.checkoutUrl) {
+      // Set flag that user has subscribed
+      localStorage.setItem('bulkload_recently_subscribed', 'true');
+      setHasSubscribed(true);
+      
+      // Show helpful message
+      toast.success('Redirecting to Gumroad... Please complete your purchase and wait a few minutes for activation.');
+      
       window.open(gumroadInfo.checkoutUrl, '_blank');
     } else {
       toast.error('Subscription link not available');
@@ -59,6 +98,51 @@ const SubscriptionPage = () => {
     toast.success('Subscription status refreshed');
   };
 
+  // Determine subscription status for display
+  const getSubscriptionStatus = () => {
+    if (hasSubscribed && subscription?.status !== 'pro') {
+      return 'processing';
+    }
+    return subscription?.status || 'free';
+  };
+
+  const getStatusDisplay = () => {
+    const status = getSubscriptionStatus();
+    
+    switch (status) {
+      case 'processing':
+        return {
+          text: 'Processing Subscription',
+          description: 'Your subscription is being processed. This usually takes 2-5 minutes.',
+          icon: Clock,
+          color: 'text-amber-600',
+          bgColor: 'bg-amber-100',
+          borderColor: 'border-amber-200',
+          statusColor: 'bg-amber-100 text-amber-800'
+        };
+      case 'pro':
+        return {
+          text: 'Pro Plan Active',
+          description: 'Unlimited downloads and premium features are now available!',
+          icon: Crown,
+          color: 'text-green-600',
+          bgColor: 'bg-green-100',
+          borderColor: 'border-green-200',
+          statusColor: 'bg-green-100 text-green-800'
+        };
+      default:
+        return {
+          text: 'Free Plan',
+          description: '10 downloads per day. Upgrade to Pro for unlimited downloads.',
+          icon: Crown,
+          color: 'text-gray-400',
+          bgColor: 'bg-gray-100',
+          borderColor: 'border-gray-200',
+          statusColor: 'bg-gray-100 text-gray-800'
+        };
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -66,6 +150,9 @@ const SubscriptionPage = () => {
       </div>
     );
   }
+
+  const statusDisplay = getStatusDisplay();
+  const StatusIcon = statusDisplay.icon;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -99,15 +186,45 @@ const SubscriptionPage = () => {
               >
                 <RefreshCw className="w-5 h-5" />
               </button>
-              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                subscription?.isActive 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {subscription?.isActive ? 'Active' : 'Inactive'}
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${statusDisplay.statusColor}`}>
+                {statusDisplay.text === 'Processing Subscription' ? 'Processing' : 
+                 statusDisplay.text === 'Pro Plan Active' ? 'Active' : 'Inactive'}
               </div>
             </div>
           </div>
+
+          {/* Processing Status Alert */}
+          {getSubscriptionStatus() === 'processing' && (
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start space-x-3">
+                <div className="bg-amber-100 p-2 rounded-full">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-amber-900 mb-1">
+                    Subscription Processing
+                  </h4>
+                  <p className="text-sm text-amber-700 mb-3">
+                    Thank you for subscribing! Your Pro plan is being activated. This process typically takes 2-5 minutes 
+                    as we receive confirmation from Gumroad. You can refresh this page or wait for automatic updates.
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 text-sm text-amber-600">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Processing webhook from Gumroad...</span>
+                    </div>
+                    <button
+                      onClick={handleRefresh}
+                      className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition-colors flex items-center space-x-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Check Now</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Debug Info - Remove in production */}
           <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
@@ -120,15 +237,13 @@ const SubscriptionPage = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="flex items-center space-x-3">
-                <Crown className={`w-5 h-5 ${
-                  subscription?.status === 'pro' ? 'text-primary-600' : 'text-gray-400'
-                }`} />
+                <StatusIcon className={`w-5 h-5 ${statusDisplay.color}`} />
                 <div>
                   <div className="font-medium text-gray-900">
-                    {subscription?.status === 'pro' ? 'Pro Plan' : 'Free Plan'}
+                    {statusDisplay.text}
                   </div>
                   <div className="text-sm text-gray-500">
-                    {subscription?.status === 'pro' ? 'Unlimited downloads' : '10 downloads per day'}
+                    {statusDisplay.description}
                   </div>
                 </div>
               </div>
@@ -192,7 +307,7 @@ const SubscriptionPage = () => {
         </div>
 
         {/* Subscription Actions */}
-        {subscription?.status !== 'pro' && (
+        {getSubscriptionStatus() !== 'pro' && (
           <div className="card mb-8">
             <div className="text-center">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -218,6 +333,19 @@ const SubscriptionPage = () => {
               <p className="text-xs text-gray-500 mt-4">
                 You'll be redirected to Gumroad to complete your purchase securely
               </p>
+              
+              {/* Processing Note */}
+              {getSubscriptionStatus() === 'processing' && (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center space-x-2 text-sm text-blue-700">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>
+                      <strong>Note:</strong> After completing payment on Gumroad, please wait 2-5 minutes 
+                      for your Pro status to activate. You can refresh this page to check the status.
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
