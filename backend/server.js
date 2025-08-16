@@ -41,37 +41,60 @@ app.use((req, res, next) => {
   console.log(`🌐 CORS Debug: ${req.method} ${req.path}`);
   console.log(`   Origin: ${req.headers.origin}`);
   console.log(`   User-Agent: ${req.headers['user-agent']}`);
-  console.log(`   Headers:`, req.headers);
+  
+  // Log CORS-related headers
+  if (req.method === 'OPTIONS') {
+    console.log(`   CORS Preflight Request for: ${req.path}`);
+    console.log(`   Access-Control-Request-Method: ${req.headers['access-control-request-method']}`);
+    console.log(`   Access-Control-Request-Headers: ${req.headers['access-control-request-headers']}`);
+  }
+  
   next();
 });
 
-app.use(
-  cors({
-    origin: corsOrigins,
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type", 
-      "Authorization", 
-      "X-Requested-With",
-      "Cache-Control",
-      "Pragma"
-    ],
-    exposedHeaders: ["Content-Length", "X-Requested-With"],
-    preflightContinue: false,
-    optionsSuccessStatus: 204
-  })
-);
+// Enhanced CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (corsOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`🚫 CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: [
+    "Content-Type", 
+    "Authorization", 
+    "X-Requested-With",
+    "Cache-Control",
+    "Pragma",
+    "Accept",
+    "Origin"
+  ],
+  exposedHeaders: ["Content-Length", "X-Requested-With"],
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // Cache preflight response for 24 hours
+};
 
-// Handle preflight requests explicitly
-app.options("*", cors());
+app.use(cors(corsOptions));
 
-// Additional preflight handling for specific routes
-app.options("/api/download/*", cors());
-app.options("/api/subscription/*", cors());
-app.options("/api/auth/*", cors());
-app.options("/api/user/*", cors());
-app.options("/api/gumroad-webhook", cors());
+// Handle preflight requests explicitly for all API routes
+app.options("*", cors(corsOptions));
+
+// Additional preflight handling for specific routes with explicit CORS
+app.options("/api/*", cors(corsOptions));
+app.options("/api/auth/*", cors(corsOptions));
+app.options("/api/download/*", cors(corsOptions));
+app.options("/api/subscription/*", cors(corsOptions));
+app.options("/api/user/*", cors(corsOptions));
+app.options("/api/gumroad-webhook", cors(corsOptions));
+app.options("/api/gumroad-webhook/*", cors(corsOptions));
 
 // Rate limiting - updated for Render hosting
 const limiter = rateLimit({

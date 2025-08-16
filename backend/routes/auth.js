@@ -1,5 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import cors from 'cors';
 import User from '../models/User.js';
 import PendingUser from '../models/PendingUser.js';
 import { validateRegistration, validateLogin } from '../middleware/auth.js';
@@ -7,6 +8,20 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 
 const router = express.Router();
+
+// CORS middleware for auth routes
+const authCorsOptions = {
+  origin: process.env.NODE_ENV === "production" 
+    ? [process.env.CORS_ORIGIN].filter(Boolean)
+    : ["http://localhost:5173", "http://localhost:3000"],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  optionsSuccessStatus: 204
+};
+
+router.use(cors(authCorsOptions));
+router.options("*", cors(authCorsOptions));
 
 // Register new user
 router.post('/register', validateRegistration, async (req, res) => {
