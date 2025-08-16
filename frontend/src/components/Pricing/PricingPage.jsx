@@ -49,13 +49,11 @@ const PricingPage = () => {
        description: 'Unlimited downloads for power users',
       features: [
         'Unlimited downloads',
-        'Priority processing',
-        'Advanced features',
-        'Premium support',
-        'Download analytics',
-        'Custom file naming',
-        'Batch processing',
-        'API access'
+        'Download history',
+        'Advanced image formats',
+        'ZIP downloads',
+        'Session-based tracking',
+        'All image types (BMP, TIFF, WebP, SVG)'
       ],
       buttonText: 'Subscribe Now',
       buttonAction: () => {
@@ -230,34 +228,22 @@ const PricingPage = () => {
                 <td className="text-center py-3 sm:py-4 px-2 sm:px-4">✅</td>
               </tr>
               <tr>
-                <td className="py-3 sm:py-4 px-2 sm:px-4 font-medium">Priority Support</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">❌</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">✅</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">✅</td>
-              </tr>
-              <tr>
-                <td className="py-3 sm:py-4 px-2 sm:px-4 font-medium">Advanced Formats</td>
+                <td className="py-3 sm:py-4 px-2 sm:px-4 font-medium">Image Formats</td>
                 <td className="text-center py-3 sm:py-4 px-2 sm:px-4">Basic</td>
+                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">Standard</td>
+                <td className="text-center py-3 sm:py-4 px-2 sm:px-4 text-primary-600 font-medium">All Formats</td>
+              </tr>
+              <tr>
+                <td className="py-3 sm:py-4 px-2 sm:px-4 font-medium">ZIP Downloads</td>
+                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">✅</td>
                 <td className="text-center py-3 sm:py-4 px-2 sm:px-4">✅</td>
                 <td className="text-center py-3 sm:py-4 px-2 sm:px-4">✅</td>
               </tr>
               <tr>
-                <td className="py-3 sm:py-4 px-2 sm:px-4 font-medium">Download Analytics</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">❌</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">❌</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">✅</td>
-              </tr>
-              <tr>
-                <td className="py-3 sm:py-4 px-2 sm:px-4 font-medium">Custom File Naming</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">❌</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">❌</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">✅</td>
-              </tr>
-              <tr>
-                <td className="py-3 sm:py-4 px-2 sm:px-4 font-medium">API Access</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">❌</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">❌</td>
-                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">✅</td>
+                <td className="py-3 sm:py-4 px-2 sm:px-4 font-medium">Session Tracking</td>
+                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">IP-based</td>
+                <td className="text-center py-3 sm:py-4 px-2 sm:px-4">Account-based</td>
+                <td className="text-center py-3 sm:py-4 px-2 sm:px-4 text-primary-600 font-medium">Account-based</td>
               </tr>
             </tbody>
           </table>
