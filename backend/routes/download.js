@@ -104,9 +104,14 @@ router.post('/images', optionalAuth, async (req, res) => {
             timeout: 30000,
             maxContentLength: 10 * 1024 * 1024, // 10MB limit
             headers: {
-              'Accept': isSvg ? 'image/svg+xml,text/plain' : 'image/*',
+              'Accept': isSvg ? 'image/svg+xml,text/plain' : 'image/*,application/octet-stream',
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
               'Referer': url
+            },
+            // Follow redirects for image URLs
+            maxRedirects: 5,
+            validateStatus: function (status) {
+              return status >= 200 && status < 400; // Accept redirects
             }
           });
         } catch (error) {
@@ -134,9 +139,14 @@ router.post('/images', optionalAuth, async (req, res) => {
                   timeout: 30000,
                   maxContentLength: 10 * 1024 * 1024,
                   headers: {
-                    'Accept': isSvg ? 'image/svg+xml,text/plain' : 'image/*',
+                    'Accept': isSvg ? 'image/svg+xml,text/plain' : 'image/*,application/octet-stream',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                     'Referer': url
+                  },
+                  // Follow redirects for image URLs
+                  maxRedirects: 5,
+                  validateStatus: function (status) {
+                    return status >= 200 && status < 400; // Accept redirects
                   }
                 });
                 
@@ -161,6 +171,14 @@ router.post('/images', optionalAuth, async (req, res) => {
         }
 
         const contentType = response.headers['content-type'];
+        
+        // Debug logging for content type and response
+        console.log(`Download debug for ${url}:`, {
+          contentType,
+          contentLength: response.headers['content-length'],
+          responseSize: response.data.length,
+          isSvg
+        });
         
                  // For SVG files, check if content is valid
          if (isSvg) {
@@ -214,25 +232,54 @@ router.post('/images', optionalAuth, async (req, res) => {
            });
            
          } else {
-          // Handle regular images
-          if (!contentType.startsWith('image/')) {
-            results.push({
-              url,
-              success: false,
-              error: 'Not an image file'
-            });
-            continue;
+          // Handle regular images - be more flexible with content types
+          if (!contentType.startsWith('image/') && !contentType.includes('octet-stream')) {
+            // Try to detect if it's actually an image by checking the first few bytes
+            const firstBytes = response.data.slice(0, 4);
+            const isJPEG = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8;
+            const isPNG = firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && firstBytes[2] === 0x4E && firstBytes[3] === 0x47;
+            const isGIF = firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46;
+            const isWebP = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46 && firstBytes[3] === 0x57;
+            
+            if (!isJPEG && !isPNG && !isGIF && !isWebP) {
+              results.push({
+                url,
+                success: false,
+                error: 'Not an image file'
+              });
+              continue;
+            }
+            
+            // If we detect it's an image but content-type is wrong, fix it
+            if (isJPEG) contentType = 'image/jpeg';
+            else if (isPNG) contentType = 'image/png';
+            else if (isGIF) contentType = 'image/gif';
+            else if (isWebP) contentType = 'image/webp';
           }
 
           // Convert to base64
           const base64 = Buffer.from(response.data, 'binary').toString('base64');
           const dataUrl = `data:${contentType};base64,${base64}`;
 
-          // Generate filename
-          let filename = url.split('/').pop() || `image-${i + 1}`;
-          if (!filename.includes('.')) {
+          // Generate filename - handle Unsplash and other complex URLs better
+          let filename = '';
+          
+          // Try to extract filename from URL path
+          const urlPath = url.split('?')[0]; // Remove query parameters
+          const pathParts = urlPath.split('/');
+          const lastPart = pathParts[pathParts.length - 1];
+          
+          if (lastPart && lastPart.includes('.')) {
+            // URL has a filename with extension
+            filename = lastPart;
+          } else if (lastPart && lastPart.length > 0) {
+            // URL has a name but no extension
             const extension = contentType.split('/')[1] || 'jpg';
-            filename = `${filename}.${extension}`;
+            filename = `${lastPart}.${extension}`;
+          } else {
+            // Generate generic filename
+            const extension = contentType.split('/')[1] || 'jpg';
+            filename = `image-${i + 1}.${extension}`;
           }
           
           // Sanitize filename to avoid ZIP issues
