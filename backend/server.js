@@ -36,17 +36,42 @@ console.log("CORS Origins:", corsOrigins);
 console.log("NODE_ENV:", process.env.NODE_ENV);
 console.log("CORS_ORIGIN env var:", process.env.CORS_ORIGIN);
 
+// CORS debugging middleware
+app.use((req, res, next) => {
+  console.log(`🌐 CORS Debug: ${req.method} ${req.path}`);
+  console.log(`   Origin: ${req.headers.origin}`);
+  console.log(`   User-Agent: ${req.headers['user-agent']}`);
+  console.log(`   Headers:`, req.headers);
+  next();
+});
+
 app.use(
   cors({
     origin: corsOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: [
+      "Content-Type", 
+      "Authorization", 
+      "X-Requested-With",
+      "Cache-Control",
+      "Pragma"
+    ],
+    exposedHeaders: ["Content-Length", "X-Requested-With"],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   })
 );
 
 // Handle preflight requests explicitly
 app.options("*", cors());
+
+// Additional preflight handling for specific routes
+app.options("/api/download/*", cors());
+app.options("/api/subscription/*", cors());
+app.options("/api/auth/*", cors());
+app.options("/api/user/*", cors());
+app.options("/api/gumroad-webhook", cors());
 
 // Rate limiting - updated for Render hosting
 const limiter = rateLimit({

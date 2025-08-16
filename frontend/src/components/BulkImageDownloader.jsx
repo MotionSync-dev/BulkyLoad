@@ -585,11 +585,8 @@ const BulkImageDownloader = () => {
       // Reset while fetching to avoid showing stale data
       setRemainingDownloads(null);
 
-      const baseHeaders = {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      };
-      const headers = token ? { ...baseHeaders, Authorization: `Bearer ${token}` } : baseHeaders;
+      // Simplified headers to avoid CORS issues
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       console.log('Request headers:', headers);
       
       if (isAuthenticated) {
@@ -606,7 +603,7 @@ const BulkImageDownloader = () => {
         console.log('Anonymous user, fetching download count');
         // For anonymous users, fetch remaining downloads
         const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/download/remaining`, {
-          headers: baseHeaders
+          headers: {} // No headers for anonymous users
         });
         console.log('Anonymous user download response:', response.data);
         setRemainingDownloads(response.data);
