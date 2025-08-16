@@ -44,7 +44,7 @@ const PricingPage = () => {
          {
        id: 'pro',
        name: 'Pro Subscription',
-       price: '$7',
+       price: '$9.99',
        period: '/month',
        description: 'Unlimited downloads for power users',
       features: [

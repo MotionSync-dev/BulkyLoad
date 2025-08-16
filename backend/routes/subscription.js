@@ -87,7 +87,7 @@ router.get("/gumroad/product", async (req, res) => {
     res.json({
       productId,
       checkoutUrl,
-      price: "$7",
+      price: "$9.99",
       period: "monthly",
     });
   } catch (error) {

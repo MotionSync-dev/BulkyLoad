@@ -199,7 +199,7 @@ const SubscriptionPage = () => {
                 Upgrade to Pro Plan
               </h3>
               <p className="text-gray-600 mb-6">
-                Get unlimited downloads and premium features for just $7/month
+                Get unlimited downloads and premium features for just $9.99/month
               </p>
               
               {gumroadInfo ? (
@@ -208,7 +208,7 @@ const SubscriptionPage = () => {
                   className="btn-primary text-lg px-8 py-3 flex items-center justify-center space-x-2 mx-auto"
                 >
                   <Crown className="w-5 h-5" />
-                  <span>Subscribe Now - $7/month</span>
+                  <span>Subscribe Now - $9.99/month</span>
                   <ExternalLink className="w-4 h-4" />
                 </button>
               ) : (
