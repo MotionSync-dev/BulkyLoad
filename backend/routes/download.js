@@ -19,20 +19,48 @@ router.post("/images", optionalAuth, async (req, res) => {
 
     // Dynamic URL limit based on user type
     let maxUrlsPerRequest = 5; // Default for anonymous users
-    
+
     if (req.user) {
-      maxUrlsPerRequest = 10; // Registered users: 10 URLs per request
+      // Check if user has active Pro subscription
+      const user = await User.findById(req.user.userId);
+      if (
+        user &&
+        user.subscription &&
+        user.subscription.status === "pro" &&
+        user.subscription.expiresAt &&
+        new Date() < new Date(user.subscription.expiresAt)
+      ) {
+        maxUrlsPerRequest = 100; // Pro users: 100 URLs per request
+      } else {
+        maxUrlsPerRequest = 10; // Registered users: 10 URLs per request
+      }
     }
 
     if (urls.length > maxUrlsPerRequest) {
-      const userType = req.user ? 'registered' : 'anonymous';
-      const limitText = req.user ? '10 URLs' : '5 URLs';
-        
+      const userType = req.user ? "registered" : "anonymous";
+      let limitText;
+      if (req.user) {
+        const user = await User.findById(req.user.userId);
+        if (
+          user &&
+          user.subscription &&
+          user.subscription.status === "pro" &&
+          user.subscription.expiresAt &&
+          new Date() < new Date(user.subscription.expiresAt)
+        ) {
+          limitText = "100 URLs";
+        } else {
+          limitText = "10 URLs";
+        }
+      } else {
+        limitText = "5 URLs";
+      }
+
       return res.status(400).json({
         error: `Maximum ${limitText} allowed per request. You requested ${urls.length} URLs.`,
         maxAllowed: maxUrlsPerRequest,
         requested: urls.length,
-        userType: userType
+        userType: userType,
       });
     }
 
