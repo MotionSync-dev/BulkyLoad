@@ -34,16 +34,14 @@ const userSchema = new mongoose.Schema({
     unique: true,
     trim: true,
     minlength: 3,
-    maxlength: 30,
-    match: /^[a-zA-Z0-9_]+$/
+    maxlength: 30
   },
   email: {
     type: String,
     required: true,
     unique: true,
     trim: true,
-    lowercase: true,
-    match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    lowercase: true
   },
   password: {
     type: String,
@@ -54,34 +52,41 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  verificationCode: {
-    type: String,
-    default: null
-  },
-  verificationCodeExpiresAt: {
-    type: Date,
-    default: null
-  },
   subscription: {
     status: {
       type: String,
       enum: ['free', 'pro'],
       default: 'free'
     },
-    gumroadId: String,
     expiresAt: Date,
-    createdAt: Date
+    gumroadId: String
   },
-  downloadHistory: [downloadHistorySchema],
   dailyDownloads: {
     count: {
       type: Number,
       default: 0
     },
-    resetDate: {
+    lastReset: {
       type: Date,
       default: Date.now
     }
+  },
+  downloadHistory: [{
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    urls: [String],
+    totalCount: Number,
+    successCount: Number,
+    failedCount: Number
+  }],
+  sessionId: String,
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true

@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import cors from 'cors';
+import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import PendingUser from '../models/PendingUser.js';
 import { validateRegistration, validateLogin } from '../middleware/auth.js';
@@ -11,7 +12,7 @@ const router = express.Router();
 
 // CORS middleware for auth routes
 const authCorsOptions = {
-  origin: process.env.NODE_ENV === "production" 
+  origin: process.env.NODE_ENV === "production"
     ? [process.env.CORS_ORIGIN].filter(Boolean)
     : ["http://localhost:5173", "http://localhost:3000"],
   credentials: true,
@@ -23,245 +24,231 @@ const authCorsOptions = {
 router.use(cors(authCorsOptions));
 router.options("*", cors(authCorsOptions));
 
-// Register new user
+// Email configuration
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 587),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  },
+  // Add connection timeout
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,   // 10 seconds
+  socketTimeout: 10000      // 10 seconds
+});
+
+// Helper function to send verification email
+const sendVerificationEmail = async (email, verificationCode) => {
+  const mailOptions = {
+    from: process.env.MAIL_FROM || 'no-reply@bulkyload.app',
+    to: email,
+    subject: 'Your BulkyLoad verification code',
+    text: `Hi!\n\nYour verification code is: ${verificationCode}\n\nThis code expires in 15 minutes.\n\nIf you didn't request this code, please ignore this email.\n\nBest regards,\nThe BulkyLoad Team`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Welcome to BulkyLoad! 🎉</h2>
+        <p>Hi <strong>${email.split('@')[0]}</strong>,</p>
+        <p>Your verification code is:</p>
+        <div style="background: #f3f4f6; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+          <h1 style="color: #2563eb; font-size: 32px; margin: 0; letter-spacing: 4px;">${verificationCode}</h1>
+        </div>
+        <p><strong>⚠️ This code expires in 15 minutes.</strong></p>
+        <p>Enter this code in the app to complete your registration and start downloading images!</p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #6b7280; font-size: 14px;">
+          If you didn't request this code, please ignore this email.<br>
+          Best regards,<br>
+          The BulkyLoad Team
+        </p>
+      </div>
+    `
+  };
+  
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Verification email sent to ${email}`);
+  } catch (error) {
+    console.error(`❌ Failed to send verification email to ${email}:`, error);
+  }
+};
+
+// Helper function to send password reset email
+const sendPasswordResetEmail = async (email, resetToken) => {
+  const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
+  
+  const mailOptions = {
+    from: process.env.MAIL_FROM || 'no-reply@bulkyload.app',
+    to: email,
+    subject: 'Your BulkyLoad password reset code',
+    text: `Hi!\n\nYour password reset code is: ${resetToken}\n\nThis code expires in 1 hour.\n\nIf you didn't request this code, please ignore this email.\n\nBest regards,\nThe BulkyLoad Team`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Password Reset Request</h2>
+        <p>Hi <strong>${email.split('@')[0]}</strong>,</p>
+        <p>You requested a password reset for your BulkyLoad account.</p>
+        <p>Click the button below to reset your password:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetUrl}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Reset Password</a>
+        </div>
+        <p>Or copy and paste this link in your browser:</p>
+        <p style="word-break: break-all; color: #6b7280;">${resetUrl}</p>
+        <p><strong>This link will expire in 1 hour.</strong></p>
+        <p>If you didn't request a password reset, please ignore this email.</p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #6b7280; font-size: 14px;">
+          Best regards,<br>
+          The BulkyLoad Team
+        </p>
+      </div>
+    `
+  };
+  
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Password reset email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Failed to send password reset email to ${email}:`, error);
+    return false;
+  }
+};
+
+// Register user
 router.post('/register', validateRegistration, async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    console.log('🚀 Starting registration for:', { username, email });
-
-    // Check if user already exists (either pending or verified)
-    const existingUser = await User.findByEmail(email);
+    // Check if user already exists
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
-      return res.status(400).json({ error: 'User with this email already exists' });
+      return res.status(400).json({ 
+        error: existingUser.email === email ? 'Email already registered' : 'Username already taken' 
+      });
     }
 
-    const existingPendingUser = await PendingUser.findByEmail(email);
-    if (existingPendingUser) {
-      return res.status(400).json({ error: 'Verification email already sent. Please check your email or request a new code.' });
-    }
-
-    const existingUsername = await User.findByUsername(username);
-    if (existingUsername) {
-      return res.status(400).json({ error: 'Username already taken' });
-    }
-
-    const existingPendingUsername = await PendingUser.findByUsername(username);
-    if (existingPendingUsername) {
-      return res.status(400).json({ error: 'Username already taken' });
-    }
-
-    // Create verification code
-    const code = (Math.floor(100000 + Math.random() * 900000)).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-    console.log('📝 Creating pending user...');
-
-    // Create pending user (not actual user yet)
-    const pendingUser = await PendingUser.create({ 
-      username, 
-      email, 
-      password, 
-      verificationCode: code,
-      verificationCodeExpiresAt: expiresAt
+    // Generate verification code
+    const verificationCode = (Math.floor(100000 + Math.random() * 900000)).toString();
+    
+    // Create pending user
+    const pendingUser = new PendingUser({
+      username,
+      email,
+      password,
+      verificationCode,
+      verificationCodeExpiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+      sessionId: req.body.sessionId || null
     });
 
-    console.log('✅ Pending user created, sending email asynchronously...');
+    await pendingUser.save();
 
-    // Send email with code ASYNCHRONOUSLY (don't wait for it)
-    sendVerificationEmail(email, code, username).catch(error => {
-      console.error('❌ Failed to send verification email:', error);
-      // Note: We don't delete the pending user here to avoid race conditions
-      // The user can still verify with the code they might receive
+    // Send verification email (asynchronous)
+    sendVerificationEmail(email, verificationCode);
+
+    res.status(201).json({ 
+      message: 'Registration successful! Please check your email for verification code.',
+      email: email
     });
-
-    // Respond immediately to user
-    res.status(201).json({
-      message: 'Registration successful! Check your email for verification code.',
-      pendingUserId: pendingUser._id,
-      email: pendingUser.email,
-      username: pendingUser.username,
-      requiresVerification: true,
-      note: 'If you don\'t receive the email within 2 minutes, check your spam folder or request a new code.'
-    });
-
   } catch (error) {
-    console.error('❌ Registration error:', error);
-    res.status(500).json({ error: 'Failed to register user' });
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
   }
 });
 
-// Async function to send verification email
-async function sendVerificationEmail(email, code, username) {
+// Verify email
+router.post('/verify', async (req, res) => {
   try {
-    console.log('📧 Sending verification email to:', email);
-    
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      },
-      // Add connection timeout
-      connectionTimeout: 10000, // 10 seconds
-      greetingTimeout: 10000,   // 10 seconds
-      socketTimeout: 10000      // 10 seconds
+    const { email, verificationCode } = req.body;
+
+    const pendingUser = await PendingUser.findOne({ 
+      email, 
+      verificationCode,
+      verified: false 
     });
 
-    const mailOptions = {
-      from: process.env.MAIL_FROM || 'no-reply@bulkyload.app',
-      to: email,
-      subject: 'Your BulkyLoad verification code',
-      text: `Hi ${username}!\n\nYour verification code is: ${code}\n\nThis code expires in 15 minutes.\n\nIf you didn't request this code, please ignore this email.\n\nBest regards,\nThe BulkyLoad Team`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2563eb;">Welcome to BulkyLoad! 🎉</h2>
-          <p>Hi <strong>${username}</strong>,</p>
-          <p>Your verification code is:</p>
-          <div style="background: #f3f4f6; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
-            <h1 style="color: #2563eb; font-size: 32px; margin: 0; letter-spacing: 4px;">${code}</h1>
-          </div>
-          <p><strong>⚠️ This code expires in 15 minutes.</strong></p>
-          <p>Enter this code in the app to complete your registration and start downloading images!</p>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-          <p style="color: #6b7280; font-size: 14px;">
-            If you didn't request this code, please ignore this email.<br>
-            Best regards,<br>
-            The BulkyLoad Team
-          </p>
-        </div>
-      `
-    };
+    if (!pendingUser) {
+      return res.status(400).json({ error: 'Invalid verification code or email' });
+    }
 
-    const result = await transporter.sendMail(mailOptions);
-    console.log('✅ Verification email sent successfully to:', email, 'Message ID:', result.messageId);
-    
+    // Check if code is expired (15 minutes)
+    const now = new Date();
+    const codeAge = now - pendingUser.createdAt;
+    if (codeAge > 15 * 60 * 1000) { // 15 minutes
+      await PendingUser.findByIdAndDelete(pendingUser._id);
+      return res.status(400).json({ error: 'Verification code has expired' });
+    }
+
+    // Create verified user
+    const user = new User({
+      username: pendingUser.username,
+      email: pendingUser.email,
+      password: pendingUser.password,
+      emailVerified: true,
+      sessionId: pendingUser.sessionId
+    });
+
+    await user.save();
+    await PendingUser.findByIdAndDelete(pendingUser._id);
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'Email verified successfully!',
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        subscription: user.subscription
+      }
+    });
   } catch (error) {
-    console.error('❌ Failed to send verification email to:', email, 'Error:', error.message);
-    // Don't throw - this is handled gracefully
+    console.error('Verification error:', error);
+    res.status(500).json({ error: 'Verification failed' });
   }
-}
+});
 
 // Login user
 router.post('/login', validateLogin, async (req, res) => {
   try {
     const { email, password } = req.body;
-    
-    console.log('🔐 Login attempt for email:', email);
 
-    // Find user by email
-    const user = await User.findByEmail(email);
+    const user = await User.findOne({ email });
     if (!user) {
-      console.log('❌ User not found for email:', email);
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    console.log('✅ User found:', { id: user.id, username: user.username, emailVerified: user.emailVerified });
-
-    // Check password
-    console.log('🔒 Comparing passwords...');
-    const isValidPassword = await user.comparePassword(password);
-    console.log('🔑 Password comparison result:', isValidPassword);
-    
-    if (!isValidPassword) {
-      console.log('❌ Invalid password for user:', email);
-      return res.status(401).json({ error: 'Invalid email or password' });
-    }
-
-    console.log('✅ Password valid for user:', email);
-
-    // Block login if not verified
-    if (!user.emailVerified) {
-      console.log('⚠️ Email not verified for user:', email);
-      return res.status(403).json({ error: 'Email not verified', requiresVerification: true, userId: user.id, email: user.email });
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email, username: user.username },
+      { userId: user._id, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-
-    console.log('🎉 Login successful for user:', email);
 
     res.json({
-      message: 'Login successful',
+      message: 'Login successful!',
+      token,
       user: {
-        id: user.id,
+        id: user._id,
         username: user.username,
-        email: user.email
-      },
-      token
+        email: user.email,
+        subscription: user.subscription
+      }
     });
   } catch (error) {
-    console.error('❌ Login error:', error);
-    res.status(500).json({ error: 'Failed to login' });
-  }
-});
-
-// Verify email code and create actual user
-router.post('/verify', async (req, res) => {
-  try {
-    const { pendingUserId, code } = req.body;
-    
-    if (!pendingUserId || !code) {
-      return res.status(400).json({ error: 'Pending user ID and verification code are required' });
-    }
-
-    console.log('🔍 Verifying code for pending user:', pendingUserId);
-
-    const pendingUser = await PendingUser.findById(pendingUserId);
-    if (!pendingUser) {
-      return res.status(404).json({ error: 'Pending user not found or verification expired' });
-    }
-
-    if (new Date() > pendingUser.verificationCodeExpiresAt) {
-      // Clean up expired pending user
-      await PendingUser.findByIdAndDelete(pendingUserId);
-      return res.status(400).json({ error: 'Verification code expired. Please register again.' });
-    }
-
-    if (pendingUser.verificationCode !== String(code)) {
-      return res.status(400).json({ error: 'Invalid verification code' });
-    }
-
-    console.log('✅ Code verified, creating user account...');
-
-    // Create actual user
-    const newUser = await User.create({
-      username: pendingUser.username,
-      email: pendingUser.email,
-      password: pendingUser.password, // Already hashed
-      emailVerified: true
-    });
-    
-    // Delete pending user
-    await PendingUser.findByIdAndDelete(pendingUserId);
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: newUser.id, email: newUser.email, username: newUser.username },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    console.log('🎉 User account created successfully:', newUser.username);
-
-    res.json({ 
-      message: 'Email verified successfully. Account created!', 
-      token, 
-      user: { 
-        id: newUser.id, 
-        email: newUser.email, 
-        username: newUser.username 
-      } 
-    });
-  } catch (error) {
-    console.error('❌ Verification error:', error);
-    res.status(500).json({ error: 'Failed to verify email' });
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
@@ -269,45 +256,100 @@ router.post('/verify', async (req, res) => {
 router.post('/resend-code', async (req, res) => {
   try {
     const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
 
-    console.log('📧 Resending verification code to:', email);
-
-    // Find pending user
-    const pendingUser = await PendingUser.findByEmail(email);
+    const pendingUser = await PendingUser.findOne({ email, verified: false });
     if (!pendingUser) {
-      return res.status(404).json({ error: 'No pending registration found for this email' });
+      return res.status(400).json({ error: 'No pending verification found for this email' });
     }
 
-    // Check if code is still valid
-    if (new Date() > pendingUser.verificationCodeExpiresAt) {
-      // Generate new code
-      const newCode = (Math.floor(100000 + Math.random() * 900000)).toString();
-      const newExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-      
-      pendingUser.verificationCode = newCode;
-      pendingUser.verificationCodeExpiresAt = newExpiresAt;
-      await pendingUser.save();
-      
-      console.log('🔄 Generated new verification code for:', email);
-    }
+    // Generate new verification code
+    const newVerificationCode = (Math.floor(100000 + Math.random() * 900000)).toString();
+    pendingUser.verificationCode = newVerificationCode;
+    pendingUser.verificationCodeExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    await pendingUser.save();
 
-    // Send email asynchronously
-    sendVerificationEmail(email, pendingUser.verificationCode, pendingUser.username).catch(error => {
-      console.error('❌ Failed to resend verification email:', error);
-    });
+    // Send new verification email (asynchronous)
+    sendVerificationEmail(email, newVerificationCode);
 
-    res.json({ 
-      message: 'Verification code resent successfully. Check your email.',
-      note: 'If you don\'t receive the email within 2 minutes, check your spam folder.'
-    });
-
+    res.json({ message: 'New verification code sent to your email' });
   } catch (error) {
-    console.error('❌ Resend code error:', error);
+    console.error('Resend code error:', error);
     res.status(500).json({ error: 'Failed to resend verification code' });
+  }
+});
+
+// Forgot password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Don't reveal if email exists or not for security
+      return res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Save reset token to user
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = resetTokenExpiry;
+    await user.save();
+
+    // Send password reset email
+    const emailSent = await sendPasswordResetEmail(email, resetToken);
+    
+    if (emailSent) {
+      res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
+    } else {
+      res.status(500).json({ error: 'Failed to send password reset email' });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to process password reset request' });
+  }
+});
+
+// Reset password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    // Find user with valid reset token
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(8);
+    user.password = await bcrypt.hash(newPassword, salt);
+    
+    // Clear reset token
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.updatedAt = new Date();
+    
+    await user.save();
+
+    res.json({ message: 'Password has been reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 

@@ -4,6 +4,8 @@ import { Toaster } from 'react-hot-toast';
 import BulkImageDownloader from './components/BulkImageDownloader';
 import HomePage from './components/HomePage/HomePage';
 import AuthPage from './components/Auth/AuthPage';
+import ForgotPassword from './components/Auth/ForgotPassword';
+import ResetPassword from './components/Auth/ResetPassword';
 import UserProfile from './components/User/UserProfile';
 import SubscriptionPage from './components/Subscription/SubscriptionPage';
 import PricingPage from './components/Pricing/PricingPage';
@@ -47,6 +49,20 @@ const MainLayout = ({ children }) => {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-4">
+              {/* Navigation Links */}
+              <a
+                href="/"
+                className="text-gray-600 hover:text-gray-800 transition-colors duration-200 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Home
+              </a>
+              <a
+                href="/download"
+                className="text-gray-600 hover:text-gray-800 transition-colors duration-200 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Download
+              </a>
+              
               {!isAuthenticated && (
                 <a
                   href="/pricing"
@@ -58,10 +74,13 @@ const MainLayout = ({ children }) => {
               )}
               {isAuthenticated ? (
                 <>
-                  <div className="flex items-center space-x-2 text-gray-600">
+                  <a
+                    href="/profile"
+                    className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors duration-200 hover:bg-gray-100 px-3 py-2 rounded-md"
+                  >
                     <User className="w-4 h-4" />
                     <span className="text-sm font-medium">{user?.username}</span>
-                  </div>
+                  </a>
                   <a
                     href="/subscription"
                     className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
@@ -259,6 +278,8 @@ const AppContent = () => {
           } 
         />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route 
           path="/profile" 
           element={

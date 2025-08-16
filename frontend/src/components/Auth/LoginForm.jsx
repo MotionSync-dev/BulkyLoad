@@ -98,6 +98,14 @@ const LoginForm = ({ onSwitchToRegister }) => {
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
+          <div className="mt-2 text-right">
+            <a
+              href="/forgot-password"
+              className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+            >
+              Forgot your password?
+            </a>
+          </div>
         </div>
 
         <button
