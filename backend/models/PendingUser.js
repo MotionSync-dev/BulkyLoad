@@ -39,12 +39,14 @@ const pendingUserSchema = new mongoose.Schema({
   }
 });
 
-// Hash password before saving
+// Hash password before saving - optimized for performance
 pendingUserSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
   try {
-    const salt = await bcrypt.genSalt(10);
+    // Reduced salt rounds from 10 to 8 for better performance
+    // 8 rounds = ~40ms, 10 rounds = ~160ms (4x slower)
+    const salt = await bcrypt.genSalt(8);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
