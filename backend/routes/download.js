@@ -265,7 +265,30 @@ router.post('/images', optionalAuth, async (req, res) => {
 
           // Create data URL for the image
           const base64 = Buffer.from(response.data).toString('base64');
+          
+          // Validate base64 data
+          if (!base64 || base64.length === 0) {
+            console.error(`Empty base64 data for ${url}`);
+            results.push({
+              url,
+              success: false,
+              error: 'Failed to encode image data'
+            });
+            continue;
+          }
+          
           const dataUrl = `data:${detectedType};base64,${base64}`;
+          
+          // Validate data URL
+          if (!dataUrl.startsWith('data:') || dataUrl.length < 100) {
+            console.error(`Invalid data URL for ${url}:`, dataUrl.substring(0, 100));
+            results.push({
+              url,
+              success: false,
+              error: 'Failed to create valid data URL'
+            });
+            continue;
+          }
 
           successfulDownloads.push({
             filename,

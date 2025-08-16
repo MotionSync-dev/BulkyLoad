@@ -110,13 +110,73 @@ export const useDownloadManager = () => {
         if (downloads && downloads.length > 0) {
           console.log("📦 Processing", downloads.length, "downloads for ZIP creation");
           
-          const result = await processImageDownloads(downloads, summary);
+          try {
+            const result = await processImageDownloads(downloads, summary);
 
-          if (result.success) {
-            console.log("✅ ZIP creation successful:", result.message);
-            onSuccess?.({ results, summary, downloads, processResult: result });
-          } else {
-            throw new Error(result.message || "Failed to process downloads");
+            if (result.success) {
+              console.log("✅ ZIP creation successful:", result.message);
+              onSuccess?.({ results, summary, downloads, processResult: result });
+            } else {
+              throw new Error(result.message || "Failed to process downloads");
+            }
+          } catch (zipError) {
+            console.error("❌ ZIP creation failed:", zipError);
+            
+            // Fallback: download images individually
+            console.log("🔄 Falling back to individual downloads...");
+            try {
+              let individualSuccessCount = 0;
+              
+              for (const download of downloads) {
+                try {
+                  if (download.dataUrl && download.filename) {
+                    // Create blob from data URL
+                    const base64Data = download.dataUrl.split(",")[1];
+                    const mimeType = download.dataUrl.match(/data:([^;]+)/)?.[1] || "image/jpeg";
+                    
+                    const byteCharacters = atob(base64Data);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                      byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: mimeType });
+                    
+                    // Download individual image
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.download = download.filename.replace(/[?&=]/g, "_");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(link.href);
+                    
+                    individualSuccessCount++;
+                  }
+                } catch (individualError) {
+                  console.error(`Failed to download individual image ${download.filename}:`, individualError);
+                }
+              }
+              
+              if (individualSuccessCount > 0) {
+                console.log(`✅ Individual downloads completed: ${individualSuccessCount} images`);
+                onSuccess?.({ 
+                  results, 
+                  summary, 
+                  downloads, 
+                  processResult: { 
+                    success: true, 
+                    message: `Downloaded ${individualSuccessCount} images individually (ZIP failed)`,
+                    fallbackUsed: true
+                  } 
+                });
+              } else {
+                throw new Error("Both ZIP creation and individual downloads failed");
+              }
+            } catch (fallbackError) {
+              console.error("❌ Fallback individual downloads also failed:", fallbackError);
+              throw zipError; // Throw original ZIP error
+            }
           }
         } else if (successfulCount > 0) {
           // We have successful downloads but no downloads array (shouldn't happen)

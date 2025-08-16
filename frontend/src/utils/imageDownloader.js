@@ -57,6 +57,59 @@ export const convertSvgToPng = (svgContent, width = 800, height = 600) => {
 };
 
 /**
+ * Validate and create blob from data URL
+ * @param {string} dataUrl - Data URL string
+ * @returns {Promise<Blob>} Valid blob
+ */
+const createBlobFromDataUrl = async (dataUrl) => {
+  try {
+    // Validate data URL format
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
+      throw new Error('Invalid data URL format');
+    }
+
+    // Extract MIME type and base64 data
+    const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!matches) {
+      throw new Error('Invalid data URL structure');
+    }
+
+    const [, mimeType, base64Data] = matches;
+    
+    // Validate base64 data
+    if (!base64Data || base64Data.length === 0) {
+      throw new Error('Empty base64 data');
+    }
+
+    // Validate MIME type
+    if (!mimeType || !mimeType.startsWith('image/')) {
+      throw new Error('Invalid image MIME type');
+    }
+
+    // Convert base64 to blob
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+
+    // Validate blob
+    if (blob.size === 0) {
+      throw new Error('Generated blob is empty');
+    }
+
+    return blob;
+  } catch (error) {
+    console.error('Error creating blob from data URL:', error);
+    throw error;
+  }
+};
+
+/**
  * Process image download data and create ZIP file
  * @param {Array} downloads - Array of download objects from backend
  * @param {Object} summary - Download summary
@@ -68,89 +121,121 @@ export const processImageDownloads = async (downloads, summary) => {
       throw new Error("No downloads to process");
     }
 
-    console.log("Creating ZIP with downloads:", downloads);
+    console.log("Creating ZIP with downloads:", downloads.length);
     const zip = new JSZip();
+    let processedCount = 0;
+    let errorCount = 0;
 
     // Process downloads sequentially to handle SVG conversion
     for (let index = 0; index < downloads.length; index++) {
       const download = downloads[index];
-      console.log(`Processing download ${index + 1}:`, download);
+      console.log(`Processing download ${index + 1}/${downloads.length}:`, download.filename);
 
-      // Convert data URL back to blob
-      const base64Data = download.dataUrl.split(",")[1];
-      const mimeType =
-        download.dataUrl.match(/data:([^;]+)/)?.[1] || "image/jpeg";
-
-      console.log("MIME type:", mimeType, "Base64 length:", base64Data.length);
-
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: mimeType });
-
-      console.log("Blob created:", { size: blob.size, type: blob.type });
-
-      // Handle SVG conversion to PNG
-      if (download.isSvg || mimeType === "image/svg+xml") {
-        console.log("Converting SVG to PNG...");
-
-        try {
-          const svgContent = atob(base64Data);
-          const pngBlob = await convertSvgToPng(svgContent);
-
-          // Generate PNG filename
-          let filename = download.filename;
-          if (filename.toLowerCase().endsWith(".svg")) {
-            filename = filename.replace(/\.svg$/i, ".png");
-          } else if (!filename.toLowerCase().endsWith(".png")) {
-            filename = `image_${index + 1}.png`;
-          }
-
-          // Sanitize filename
-          const sanitizedFilename = filename.replace(/[?&=]/g, "_");
-          console.log(
-            "SVG converted to PNG:",
-            sanitizedFilename,
-            "Size:",
-            pngBlob.size
-          );
-
-          zip.file(sanitizedFilename, pngBlob);
-        } catch (svgError) {
-          console.error("SVG conversion failed:", svgError);
-          // Fallback: add original SVG to ZIP
-          const sanitizedFilename = download.filename.replace(/[?&=]/g, "_");
-          zip.file(sanitizedFilename, blob);
+      try {
+        // Validate download object
+        if (!download.dataUrl || !download.filename) {
+          console.warn(`Skipping invalid download ${index + 1}:`, download);
+          errorCount++;
+          continue;
         }
-      } else {
-        // Regular image - add to ZIP as-is
-        const sanitizedFilename = download.filename.replace(/[?&=]/g, "_");
-        console.log("Adding to ZIP:", sanitizedFilename, "Size:", blob.size);
 
-        zip.file(sanitizedFilename, blob);
+        // Create blob from data URL
+        let blob;
+        try {
+          blob = await createBlobFromDataUrl(download.dataUrl);
+        } catch (blobError) {
+          console.error(`Failed to create blob for ${download.filename}:`, blobError);
+          errorCount++;
+          continue;
+        }
+
+        // Handle SVG conversion to PNG
+        if (download.isSvg || download.filename.toLowerCase().endsWith('.svg')) {
+          console.log(`Converting SVG to PNG: ${download.filename}`);
+          
+          try {
+            // Extract SVG content from base64
+            const base64Data = download.dataUrl.split(",")[1];
+            const svgContent = atob(base64Data);
+            
+            const pngBlob = await convertSvgToPng(svgContent);
+
+            // Generate PNG filename
+            let filename = download.filename;
+            if (filename.toLowerCase().endsWith(".svg")) {
+              filename = filename.replace(/\.svg$/i, ".png");
+            } else if (!filename.toLowerCase().endsWith(".png")) {
+              filename = `image_${index + 1}.png`;
+            }
+
+            // Sanitize filename
+            const sanitizedFilename = filename.replace(/[?&=]/g, "_");
+            console.log(`SVG converted to PNG: ${sanitizedFilename}, Size: ${pngBlob.size}`);
+
+            zip.file(sanitizedFilename, pngBlob);
+            processedCount++;
+          } catch (svgError) {
+            console.error(`SVG conversion failed for ${download.filename}:`, svgError);
+            // Fallback: add original SVG to ZIP
+            const sanitizedFilename = download.filename.replace(/[?&=]/g, "_");
+            zip.file(sanitizedFilename, blob);
+            processedCount++;
+          }
+        } else {
+          // Regular image - add to ZIP as-is
+          const sanitizedFilename = download.filename.replace(/[?&=]/g, "_");
+          console.log(`Adding to ZIP: ${sanitizedFilename}, Size: ${blob.size}`);
+
+          zip.file(sanitizedFilename, blob);
+          processedCount++;
+        }
+      } catch (error) {
+        console.error(`Error processing download ${index + 1}:`, error);
+        errorCount++;
       }
     }
 
-    console.log("Generating ZIP...");
-    const zipBlob = await zip.generateAsync({ type: "blob" });
-    console.log("ZIP generated:", { size: zipBlob.size, type: zipBlob.type });
+    if (processedCount === 0) {
+      throw new Error("No valid downloads could be processed");
+    }
 
-    const zipFilename = `bulk-images-${new Date()
-      .toISOString()
-      .slice(0, 19)
-      .replace(/:/g, "-")}.zip`;
+    console.log(`ZIP preparation complete: ${processedCount} files processed, ${errorCount} errors`);
+
+    // Generate ZIP with compression
+    console.log("Generating ZIP file...");
+    const zipBlob = await zip.generateAsync({ 
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: { level: 6 }
+    });
+    
+    console.log("ZIP generated successfully:", { 
+      size: zipBlob.size, 
+      type: zipBlob.type,
+      fileCount: processedCount 
+    });
+
+    // Validate ZIP blob
+    if (zipBlob.size === 0) {
+      throw new Error("Generated ZIP file is empty");
+    }
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+    const zipFilename = `bulk-images-${timestamp}.zip`;
+    
     console.log("Downloading ZIP as:", zipFilename);
 
+    // Save ZIP file
     saveAs(zipBlob, zipFilename);
 
     return {
       success: true,
-      message: `Successfully downloaded ${summary.successful} images`,
+      message: `Successfully downloaded ${processedCount} images`,
       filename: zipFilename,
       size: zipBlob.size,
+      processedCount,
+      errorCount
     };
   } catch (error) {
     console.error("Error processing image downloads:", error);
@@ -204,19 +289,32 @@ export const createImageZip = async (images) => {
 
     // Add each image to the ZIP
     images.forEach((image, index) => {
+      if (!image.blob || !image.filename) {
+        console.warn(`Skipping invalid image ${index}:`, image);
+        return;
+      }
+
       const sanitizedFilename = image.filename.replace(/[?&=]/g, "_");
       zip.file(sanitizedFilename, image.blob);
       console.log(`Added to ZIP: ${sanitizedFilename}`);
     });
 
-    // Generate ZIP blob
-    const zipBlob = await zip.generateAsync({ type: "blob" });
+    // Generate ZIP blob with compression
+    const zipBlob = await zip.generateAsync({ 
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: { level: 6 }
+    });
+
+    // Validate ZIP blob
+    if (zipBlob.size === 0) {
+      throw new Error("Generated ZIP file is empty");
+    }
 
     // Download the ZIP file
-    const zipFilename = `bulk-images-${new Date()
-      .toISOString()
-      .slice(0, 19)
-      .replace(/:/g, "-")}.zip`;
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+    const zipFilename = `bulk-images-${timestamp}.zip`;
+    
     saveAs(zipBlob, zipFilename);
 
     console.log("ZIP download completed:", zipFilename);
